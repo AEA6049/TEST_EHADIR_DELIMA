@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Sistem Pelawat & Kehadiran v39.0 (Integrasi Cikgu Google Auth)</title>
+  <title>Sistem Pelawat & Kehadiran v39.1 (Integrasi Cikgu Google Auth)</title>
   
   <!-- GOOGLE IDENTITY SERVICES UNTUK LOGIN GMAIL -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbw7A59Vxlaa7QsPVJpc04E6L9PdiXECImgysDTiHBaQKdqe2hKReGvS76R6WsArIAKWSQ/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyJukykSCuRk-ZAKIywEt63P_wBPK-u3XNT6f_uaWJtNn6rJTcbvcdUYi2s_3iidiJmfQ/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -1277,8 +1277,11 @@
         7. Klik Create dan salin <b>Client ID</b> yang diberikan.<br>
         8. Masukkan ID tersebut di bahagian atas fail <code>index.html</code> (Cari <code>GOOGLE_CLIENT_ID</code>).<br><br>
         <i>* Guru wajib mendaftar pertama kali selepas berjaya log masuk menggunakan emel Google mereka.</i><br><br>
-        <b>PENTING (Tukar Paparan Nama GitHub):</b><br>
-        Untuk menukar URL paparan pada kotak login Google, anda <b>MESTI</b> menukarnya di bahagian <b>OAuth consent screen</b> di dalam Google Cloud Console dan kemaskini ruangan <i>App name</i>.
+        <b>PENTING (Tukar Paparan Nama / URL GitHub):</b><br>
+        Google Sign-In secara lalai memaparkan URL domain untuk memastikan keselamatan (Anti-Phishing). 
+        Untuk <b>MENYEMBUNYIKAN</b> paparan <code>.github.io</code> pada kotak login, anda <b>WAJIB</b>:
+        <br>1. Menggunakan <b>Custom Domain</b> (Contoh: namasekolah.edu.my) 
+        <br>2. Verifikasi domain tersebut dan lengkapkan <b>OAuth consent screen</b> (App name & Logo) di dalam Google Cloud Console.
       </div>
       <div class="modal-btn-row">
         <button class="modal-btn btn-cancel-modal" onclick="document.getElementById('setupHelpModal').style.display='none'">Tutup</button>
@@ -1528,7 +1531,7 @@
     if (navigator.onLine && 'caches' in window) {
       caches.keys().then(names => {
         for (let name of names) {
-          if (name !== 'ehadir-hybrid-v54-guru') {
+          if (name !== 'ehadir-hybrid-v55-guru') {
             caches.delete(name);
           }
         }
@@ -1717,11 +1720,12 @@
           google.accounts.id.initialize({
               client_id: GOOGLE_CLIENT_ID,
               callback: handleGoogleLogin,
+              context: "use", // TUKAR PAPARAN TEXT UNTUK LEBIH NATURAL
               itp_support: true
           });
           google.accounts.id.renderButton(
               document.getElementById("googleBtnWrapper"),
-              { theme: "outline", size: "large", text: "continue_with" }
+              { theme: "outline", size: "large", type: "standard", shape: "pill", text: "continue_with" }
           );
       } else {
           setTimeout(renderGoogleBtn, 500);
@@ -1748,7 +1752,7 @@
                      let gData = res.data.msg; 
                      lockGuruProfile(email, gData.nama, gData.avatar, gData.fotoUrl, gData.jawatan);
                  } else if(res.data.result === "not_found") {
-                     showModernAlert("Akaun Tidak Ditemui", "Sila daftar sebagai guru terlebih dahulu.", "error", function() {
+                     showModernAlert("Akaun Tidak Ditemui", "Akaun Google anda belum didaftarkan di dalam pangkalan data. Sila klik butang 'Daftar Ahli' untuk daftar buat kali pertama.", "error", function() {
                          openGuruRegistration(email, payload.name, payload.picture);
                      });
                  } else {
