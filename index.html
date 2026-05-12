@@ -166,6 +166,13 @@
         kat = document.getElementById('kategori').value;
       }
 
+      // VALIDASI WAJIB LOGIN GMAIL UNTUK GURU
+      if (kat === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
+         showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar masuk sebagai GURU.", "error");
+         logoutGuru(true);
+         return;
+      }
+
       let isAlreadyActive = currentList.some(i => i.nama === nama && !i.isOffline && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
       if (isAlreadyActive) {
         if (!isAuto) showModernAlert("Sesi Aktif", "Anda belum daftar keluar untuk sesi sebelum ini. Sila klik DAFTAR KELUAR.", "error");
@@ -363,6 +370,14 @@
         uuidVal = "MANUAL_OUT_" + Date.now();
       }
       
+      // VALIDASI WAJIB LOGIN GMAIL UNTUK GURU
+      if (!isAuto && katVal === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
+         showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar keluar sebagai GURU.", "error");
+         document.getElementById('guruAuthModal').style.display = 'flex';
+         renderGoogleBtn();
+         return;
+      }
+
       if (isAuto && currentList.length > 0) {
          let activeRec = currentList.find(i => i.nama === namaVal && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
          if (activeRec && activeRec.uuid) uuidVal = activeRec.uuid;
@@ -534,6 +549,12 @@
         }
 
         if (!session && locked && lockedKat && !isSubmitting && !isSedangHadir && !isSudahKeluar && !isTidakHadir) {
+          // VALIDASI: GURU mesti ada sesi Gmail aktif untuk Auto-Punch In
+          if (lockedKat === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
+              if (statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) statusEl.innerHTML += ` <br>[AUTO-IN GAGAL: SILA LOGIN GMAIL]`;
+              return;
+          }
+          
           if (inZoneStart > 0) {
             let elapsed = now - inZoneStart;
             let remainingSec = Math.ceil((MS_IN_DELAY - elapsed) / 1000);
@@ -1255,7 +1276,9 @@
         6. Pada bahagian <i>Authorized JavaScript origins</i>, masukkan URL web aplikasi anda (contoh: <code>https://halaman-app-anda.com</code>).<br>
         7. Klik Create dan salin <b>Client ID</b> yang diberikan.<br>
         8. Masukkan ID tersebut di bahagian atas fail <code>index.html</code> (Cari <code>GOOGLE_CLIENT_ID</code>).<br><br>
-        <i>* Guru wajib mendaftar pertama kali selepas berjaya log masuk menggunakan emel Google mereka.</i>
+        <i>* Guru wajib mendaftar pertama kali selepas berjaya log masuk menggunakan emel Google mereka.</i><br><br>
+        <b>PENTING (Tukar Paparan Nama GitHub):</b><br>
+        Untuk menukar URL paparan pada kotak login Google, anda <b>MESTI</b> menukarnya di bahagian <b>OAuth consent screen</b> di dalam Google Cloud Console dan kemaskini ruangan <i>App name</i>.
       </div>
       <div class="modal-btn-row">
         <button class="modal-btn btn-cancel-modal" onclick="document.getElementById('setupHelpModal').style.display='none'">Tutup</button>
@@ -1339,7 +1362,7 @@
         </div>
 
         <button id="btnLogKeluarGuruDash" class="btn btn-cancel" onclick="logoutGuru()" style="display:none; margin-top:15px; font-size:12px; padding:12px;">
-          <img src="https://cdn-icons-png.flaticon.com/128/1828/1828479.png" class="icon-3d-std"> LOG KELUAR AKAUN GURU
+          <img src="https://cdn-icons-png.flaticon.com/128/1828/1828479.png" class="icon-3d-std"> LOG KELUAR GMAIL (GURU)
         </button>
       </div>
 
@@ -1844,16 +1867,36 @@
       });
   }
 
-  function logoutGuru() {
-      showModernAlert("Pengesahan", "Adakah anda pasti untuk log keluar akaun profil Guru ini?", "confirm", function() {
-          localStorage.removeItem('ehadir_guru_email');
-          localStorage.removeItem('ehadir_locked_name');
-          localStorage.removeItem('ehadir_locked_kat');
-          localStorage.removeItem('ehadir_user_avatar');
-          localStorage.removeItem('ehadir_session');
-          localStorage.removeItem('ehadir_temp_avatar');
-          location.reload();
-      });
+  function logoutGuru(force = false) {
+      let proceed = () => {
+          let email = localStorage.getItem('ehadir_guru_email');
+          try {
+              if (email && window.google && google.accounts && google.accounts.id) {
+                  google.accounts.id.revoke(email, () => { clearGuruData(); });
+                  setTimeout(clearGuruData, 2000); 
+              } else {
+                  clearGuruData();
+              }
+          } catch(e) {
+              clearGuruData();
+          }
+      };
+      
+      if(force) {
+          proceed();
+      } else {
+          showModernAlert("Pengesahan", "Adakah anda pasti untuk log keluar akaun profil Guru ini (Log keluar Gmail)?<br>Sesi akan ditamatkan sepenuhnya.", "confirm", proceed);
+      }
+  }
+
+  function clearGuruData() {
+      localStorage.removeItem('ehadir_guru_email');
+      localStorage.removeItem('ehadir_locked_name');
+      localStorage.removeItem('ehadir_locked_kat');
+      localStorage.removeItem('ehadir_user_avatar');
+      localStorage.removeItem('ehadir_session');
+      localStorage.removeItem('ehadir_temp_avatar');
+      location.reload();
   }
 
   function closeGuruAuth() {
@@ -1998,11 +2041,14 @@
     let currentKat = sel.value;
     let currentAvatar = localStorage.getItem('ehadir_user_avatar');
     
+    // JIKA GURU NAK KUNCI TAPI BELUM LOGIN GMAIL
     if (currentKat === 'GURU' && !input.readOnly) {
-        showModernAlert("Akses Ditolak", "Bagi kategori GURU, sila log masuk menggunakan butang Google yang dipaparkan atau butang Daftar Ahli.", "error");
-        document.getElementById('guruAuthModal').style.display = 'flex';
-        renderGoogleBtn();
-        return;
+        if (!localStorage.getItem('ehadir_guru_email')) {
+            showModernAlert("Akses Ditolak", "Bagi kategori GURU, sila log masuk menggunakan butang Google yang dipaparkan atau butang Daftar Ahli.", "error");
+            document.getElementById('guruAuthModal').style.display = 'flex';
+            renderGoogleBtn();
+            return;
+        }
     }
 
     if (input.readOnly) {
