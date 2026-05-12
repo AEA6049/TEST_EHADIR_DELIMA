@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyfYET4-s3WWL2dIys8Aj7wHXVWmvAQO4-RYADv6lcOsZWNCh9-3DKCJEWY0OdzdJjWPQ/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzDfEyZJdLpGSTzwHD3jlC3KvqJA456G_a9k3ETSz6mV9dVdRVDqKw2jBczh9QK4lNhNA/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -26,8 +26,10 @@
     const RADIUS_RESET_AUTO_IN = 200;
     
     // KONFIGURASI GOOGLE LOGIN (GURU)
-    const GOOGLE_CLIENT_ID = "195095139195-vknkcc0h9b8pp75n4ej2c7jpdc5r62br.apps.googleusercontent.com";
-    const DELIMA_DOMAIN = "moe-dl.edu.my"; // Tetapkan domain rasmi (kosongkan "" jika nak benarkan semua gmail)
+    const GOOGLE_CLIENT_ID = "SILA_MASUKKAN_CLIENT_ID_GOOGLE_ANDA_DI_SINI.apps.googleusercontent.com";
+    
+    // KOSONGKAN UNTUK BENARKAN SEMUA JENIS GMAIL / GOOGLE ACCOUNT
+    const DELIMA_DOMAIN = ""; 
 
     const JADUAL_BERTUGAS = {
       "GURU":       { masuk: "07:20:00 AM", keluar: "02:00:00 PM" },
@@ -1205,7 +1207,7 @@
   <div id="guruAuthModal">
     <div class="custom-modal-content">
       <div class="modal-title" style="color:#3498db;">LOG MASUK GURU</div>
-      <div class="modal-msg">Sila gunakan emel rasmi yang telah didaftarkan.</div>
+      <div class="modal-msg">Sila gunakan akaun Google / Emel rasmi anda.</div>
       <div id="googleBtnWrapper" class="google-btn-wrapper"></div>
       <div class="modal-btn-row" style="margin-top:20px;">
         <button class="modal-btn btn-cancel-modal" onclick="closeGuruAuth()">Batal</button>
@@ -1253,7 +1255,7 @@
         6. Pada bahagian <i>Authorized JavaScript origins</i>, masukkan URL web aplikasi anda (contoh: <code>https://halaman-app-anda.com</code>).<br>
         7. Klik Create dan salin <b>Client ID</b> yang diberikan.<br>
         8. Masukkan ID tersebut di bahagian atas fail <code>index.html</code> (Cari <code>GOOGLE_CLIENT_ID</code>).<br><br>
-        <i>* Guru wajib mendaftar pertama kali selepas berjaya log masuk menggunakan emel mereka (Sebaiknya Emel DELIMA).</i>
+        <i>* Guru wajib mendaftar pertama kali selepas berjaya log masuk menggunakan emel Google mereka.</i>
       </div>
       <div class="modal-btn-row">
         <button class="modal-btn btn-cancel-modal" onclick="document.getElementById('setupHelpModal').style.display='none'">Tutup</button>
@@ -1708,7 +1710,7 @@
           let email = payload.email;
           
           if(DELIMA_DOMAIN && !email.endsWith(DELIMA_DOMAIN)) {
-              showModernAlert("Emel Tidak Sah", "Sila gunakan emel rasmi DELIMA (@" + DELIMA_DOMAIN + ").", "error");
+              showModernAlert("Emel Tidak Sah", "Sila gunakan emel rasmi (@" + DELIMA_DOMAIN + ").", "error");
               return;
           }
 
@@ -1763,7 +1765,7 @@
       } else {
           emailField.readOnly = false;
           emailField.style.background = "#ffffff";
-          emailField.placeholder = "EMEL DELIMA (@moe-dl.edu.my)";
+          emailField.placeholder = "EMEL GOOGLE ANDA";
       }
       document.getElementById('regGuruName').value = gName ? gName.toUpperCase() : "";
       document.getElementById('regGuruJawatan').value = "";
@@ -1821,8 +1823,8 @@
       let fotoBase64 = document.getElementById('regGuruFotoBase64').value;
       let avatar = localStorage.getItem('ehadir_temp_avatar') || AVATARS[0];
       
-      if(!email) return showModernAlert("Tiada Emel", "Sila isi emel DELIMA anda.", "error");
-      if(DELIMA_DOMAIN && !email.endsWith(DELIMA_DOMAIN)) return showModernAlert("Emel Tidak Sah", "Sila gunakan emel rasmi DELIMA (@" + DELIMA_DOMAIN + ").", "error");
+      if(!email) return showModernAlert("Tiada Emel", "Sila isi emel anda.", "error");
+      if(DELIMA_DOMAIN && !email.endsWith(DELIMA_DOMAIN)) return showModernAlert("Emel Tidak Sah", "Sila gunakan emel rasmi (@" + DELIMA_DOMAIN + ").", "error");
       if(!nama) return showModernAlert("Tiada Nama", "Sila isi nama penuh anda.", "error");
       if(!jawatan) return showModernAlert("Tiada Jawatan", "Sila isi jawatan anda di sekolah.", "error");
 
