@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyKg2O90pm9Fe_vKvZmjiDX9jscIvln1t-CHYITTTYyGvxNnEbZZCPz7xDE3ZN9yk4Yqw/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyvJFj0f0IbdeRHXYSHPLOpsZs2ZmjCMrcYjbzhaeCOGk3vlRpQmpWv9a4Tfcf1EsLE_g/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -1292,7 +1292,7 @@
     </div>
   </div>
 
-  <!-- Modal Register Guru -->
+  <!-- Modal Register / Update Guru -->
   <div id="guruRegisterModal">
     <div class="custom-modal-content">
       <div class="modal-title" style="color:#27ae60;">DAFTAR AKAUN GURU</div>
@@ -1847,6 +1847,7 @@ GURU</option>
       localStorage.setItem('ehadir_guru_email', email);
       localStorage.setItem('ehadir_locked_name', nama);
       localStorage.setItem('ehadir_locked_kat', "GURU");
+      localStorage.setItem('ehadir_guru_jawatan', jawatan || "");
       let finalImg = (fotoUrl && fotoUrl.length > 10) ? fotoUrl : avatar;
       localStorage.setItem('ehadir_user_avatar', finalImg);
       initLockName();
@@ -1855,8 +1856,68 @@ GURU</option>
       showModernAlert("Akaun Disahkan", "Log masuk berjaya. Selamat bertugas, " + nama + "!", "success");
   }
 
+  function openUpdateProfile() {
+      let email = localStorage.getItem('ehadir_guru_email');
+      let nama = localStorage.getItem('ehadir_locked_name');
+      let jawatan = localStorage.getItem('ehadir_guru_jawatan') || "";
+      let pic = localStorage.getItem('ehadir_user_avatar');
+
+      if (!email) return;
+
+      window.tempOldName = nama;
+
+      let emailField = document.getElementById('regGuruEmail');
+      emailField.value = email;
+      emailField.readOnly = true;
+      emailField.style.background = "#e0eafc";
+
+      document.getElementById('regGuruName').value = nama;
+      document.getElementById('regGuruJawatan').value = jawatan;
+
+      document.getElementById('regGuruFoto').value = "";
+      document.getElementById('regGuruFotoPreview').style.display = 'none';
+      document.getElementById('regGuruFotoBase64').value = "";
+
+      let titleEl = document.querySelector('#guruRegisterModal .modal-title');
+      if (titleEl) titleEl.innerHTML = "KEMASKINI PROFIL GURU";
+
+      let btnOk = document.querySelector('#guruRegisterModal .btn-ok');
+      if (btnOk) btnOk.innerHTML = "KEMASKINI SEKARANG";
+
+      let grid = document.getElementById('regAvatarGrid');
+      grid.innerHTML = "";
+      let tempAvatar = pic || AVATARS[0];
+      if (!AVATARS.includes(tempAvatar)) tempAvatar = AVATARS[0];
+
+      localStorage.setItem('ehadir_temp_avatar', tempAvatar);
+
+      AVATARS.forEach(url => {
+        let div = document.createElement('div');
+        div.className = "avatar-option";
+        if(url === tempAvatar) div.classList.add('selected');
+        div.innerHTML = `<img src="${url}">`;
+        div.onclick = (e) => {
+            document.querySelectorAll('#regAvatarGrid .avatar-option').forEach(el => el.classList.remove('selected'));
+            div.classList.add('selected');
+            localStorage.setItem('ehadir_temp_avatar', url);
+        };
+        grid.appendChild(div);
+      });
+
+      document.getElementById('guruRegisterModal').style.display = 'flex';
+  }
+
   function openManualRegister() {
       document.getElementById('guruAuthModal').style.display = 'none';
+
+      let titleEl = document.querySelector('#guruRegisterModal .modal-title');
+      if (titleEl) titleEl.innerHTML = "DAFTAR AKAUN GURU";
+
+      let btnOk = document.querySelector('#guruRegisterModal .btn-ok');
+      if (btnOk) btnOk.innerHTML = "DAFTAR / KEMASKINI";
+
+      window.tempOldName = null;
+
       if (window.tempGooglePayload) {
           openGuruRegistration(window.tempGooglePayload.email, window.tempGooglePayload.name, window.tempGooglePayload.picture);
       } else {
@@ -1937,7 +1998,16 @@ GURU</option>
       if(!jawatan) return showModernAlert("Tiada Jawatan", "Sila isi jawatan anda di sekolah.", "error");
 
       showSyncBar("Menyemak & Mendaftar Akaun...", "#f39c12");
-      sendData({action: "REGISTER_GURU", passcode: PASSCODE, email: email, nama: nama, jawatan: jawatan, fotoBase64: fotoBase64, avatar: avatar})
+      sendData({
+          action: "REGISTER_GURU", 
+          passcode: PASSCODE, 
+          email: email, 
+          nama: nama, 
+          jawatan: jawatan, 
+          fotoBase64: fotoBase64, 
+          avatar: avatar,
+          oldName: window.tempOldName || ""
+      })
       .then(res => {
          if(res.offline) {
              showModernAlert("Ralat Internet", "Pendaftaran memerlukan capaian internet aktif. Sila cuba lagi.", "error");
@@ -1945,10 +2015,36 @@ GURU</option>
          }
          if(res.data && res.data.result === "success") {
              document.getElementById('guruRegisterModal').style.display = 'none';
-             showModernAlert("Berjaya", res.data.msg || "Akaun anda telah disimpan ke pangkalan data. Sila klik Log Masuk Google untuk mengaktifkan sesi.", "success", function() {
-                 document.getElementById('guruAuthModal').style.display = 'flex';
-                 renderGoogleBtn();
-             });
+             
+             if (window.tempOldName) {
+                 localStorage.setItem('ehadir_locked_name', nama);
+                 localStorage.setItem('ehadir_guru_jawatan', jawatan);
+                 if (res.data.fotoUrl) {
+                     localStorage.setItem('ehadir_user_avatar', res.data.fotoUrl);
+                 } else {
+                     localStorage.setItem('ehadir_user_avatar', avatar);
+                 }
+
+                 let s = JSON.parse(localStorage.getItem('ehadir_session'));
+                 if (s && s.nama === window.tempOldName) {
+                     s.nama = nama;
+                     s.avatar = localStorage.getItem('ehadir_user_avatar');
+                     localStorage.setItem('ehadir_session', JSON.stringify(s));
+                 }
+
+                 showModernAlert("Berjaya", "Profil telah dikemaskini.", "success", function() {
+                     initLockName();
+                     initAvatar();
+                     checkSession();
+                     loadList();
+                 });
+                 window.tempOldName = null;
+             } else {
+                 showModernAlert("Berjaya", res.data.msg || "Akaun anda telah disimpan ke pangkalan data. Sila klik Log Masuk Google untuk mengaktifkan sesi.", "success", function() {
+                     document.getElementById('guruAuthModal').style.display = 'flex';
+                     renderGoogleBtn();
+                 });
+             }
          } else {
              showModernAlert("Ralat Pendaftaran", res.data ? res.data.msg : "Gagal mendaftar. Tiada maklum balas.", "error");
          }
@@ -1984,6 +2080,7 @@ GURU</option>
       localStorage.removeItem('ehadir_locked_name');
       localStorage.removeItem('ehadir_locked_kat');
       localStorage.removeItem('ehadir_user_avatar');
+      localStorage.removeItem('ehadir_guru_jawatan');
       localStorage.removeItem('ehadir_session');
       localStorage.removeItem('ehadir_temp_avatar');
       localStorage.removeItem('ehadir_auto_in_blocked');
@@ -2111,6 +2208,20 @@ GURU</option>
       sel.style.background = "#e0eafc";
       input.style.borderColor = "#1e3c72";
       sel.style.borderColor = "#1e3c72";
+
+      if (lockedKat === 'GURU' && localStorage.getItem('ehadir_guru_email')) {
+          input.style.color = "#3498db";
+          input.style.textDecoration = "underline";
+          input.style.cursor = "pointer";
+          input.onclick = openUpdateProfile;
+          input.title = "Klik untuk kemaskini profil";
+      } else {
+          input.style.color = "#1e3c72";
+          input.style.textDecoration = "none";
+          input.style.cursor = "default";
+          input.onclick = null;
+          input.title = "";
+      }
       
       btnImg.src = "https://cdn-icons-png.flaticon.com/128/3064/3064155.png"; 
       btnImg.style.filter = "opacity(1)";
@@ -2123,6 +2234,11 @@ GURU</option>
       sel.style.background = "#f5f8fa";
       input.style.borderColor = "#d1def0";
       sel.style.borderColor = "#d1def0";
+      input.style.color = "#1e3c72";
+      input.style.textDecoration = "none";
+      input.style.cursor = "text";
+      input.onclick = null;
+      input.title = "";
       
       btnImg.src = "https://cdn-icons-png.flaticon.com/128/3064/3064197.png"; 
       btnImg.style.filter = "opacity(0.6)";
@@ -2162,6 +2278,11 @@ GURU</option>
       sel.style.background = "#f5f8fa";
       input.style.borderColor = "#d1def0";
       sel.style.borderColor = "#d1def0";
+      input.style.color = "#1e3c72";
+      input.style.textDecoration = "none";
+      input.style.cursor = "text";
+      input.onclick = null;
+      input.title = "";
       
       localStorage.removeItem('ehadir_locked_name');
       localStorage.removeItem('ehadir_locked_kat');
