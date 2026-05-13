@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Sistem Pelawat & Kehadiran v39.4 (Integrasi KPM Google Log Aktif & Fix)</title>
+  <title>Sistem Pelawat & Kehadiran v39.5 (Integrasi KPM Google Log Aktif & Fix)</title>
   
   <!-- GOOGLE IDENTITY SERVICES UNTUK LOGIN GMAIL -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxCeZukwG3nNyoKLBHtdFtLKI7hgOswdfqU-qRXRHPCJboGtcQO-D76q25JvfyKtbfXZw/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyvJFj0f0IbdeRHXYSHPLOpsZs2ZmjCMrcYjbzhaeCOGk3vlRpQmpWv9a4Tfcf1EsLE_g/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -1587,7 +1587,7 @@ GURU</option>
     if (navigator.onLine && 'caches' in window) {
       caches.keys().then(names => {
         for (let name of names) {
-          if (name !== 'ehadir-hybrid-v58-guru') {
+          if (name !== 'ehadir-hybrid-v59-guru') {
             caches.delete(name);
           }
         }
@@ -1875,8 +1875,15 @@ GURU</option>
       document.getElementById('regGuruJawatan').value = jawatan;
 
       document.getElementById('regGuruFoto').value = "";
-      document.getElementById('regGuruFotoPreview').style.display = 'none';
-      document.getElementById('regGuruFotoBase64').value = "";
+      
+      if (pic && pic.includes("drive.google.com")) {
+          document.getElementById('regGuruFotoPreview').src = pic;
+          document.getElementById('regGuruFotoPreview').style.display = 'block';
+          document.getElementById('regGuruFotoBase64').value = ""; 
+      } else {
+          document.getElementById('regGuruFotoPreview').style.display = 'none';
+          document.getElementById('regGuruFotoBase64').value = "";
+      }
 
       let titleEl = document.querySelector('#guruRegisterModal .modal-title');
       if (titleEl) titleEl.innerHTML = "KEMASKINI PROFIL GURU";
@@ -1886,7 +1893,7 @@ GURU</option>
 
       let grid = document.getElementById('regAvatarGrid');
       grid.innerHTML = "";
-      let tempAvatar = pic || AVATARS[0];
+      let tempAvatar = pic;
       if (!AVATARS.includes(tempAvatar)) tempAvatar = AVATARS[0];
 
       localStorage.setItem('ehadir_temp_avatar', tempAvatar);
@@ -2019,16 +2026,14 @@ GURU</option>
              if (window.tempOldName) {
                  localStorage.setItem('ehadir_locked_name', nama);
                  localStorage.setItem('ehadir_guru_jawatan', jawatan);
-                 if (res.data.fotoUrl) {
-                     localStorage.setItem('ehadir_user_avatar', res.data.fotoUrl);
-                 } else {
-                     localStorage.setItem('ehadir_user_avatar', avatar);
-                 }
+                 
+                 let finalAvatarSaved = res.data.fotoUrl ? res.data.fotoUrl : avatar;
+                 localStorage.setItem('ehadir_user_avatar', finalAvatarSaved);
 
                  let s = JSON.parse(localStorage.getItem('ehadir_session'));
                  if (s && s.nama === window.tempOldName) {
                      s.nama = nama;
-                     s.avatar = localStorage.getItem('ehadir_user_avatar');
+                     s.avatar = finalAvatarSaved;
                      localStorage.setItem('ehadir_session', JSON.stringify(s));
                  }
 
