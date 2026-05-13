@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Sistem Pelawat & Kehadiran v39.2 (Integrasi Cikgu Google Auth Fix)</title>
+  <title>Sistem Pelawat & Kehadiran v39.3 (Integrasi Cikgu Google Auth Fix & Error Tracking)</title>
   
   <!-- GOOGLE IDENTITY SERVICES UNTUK LOGIN GMAIL -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwWOeS2djhKdW9EXSH3V5La7BBTKG8rqjcXcXB0BwqzBddYYmR_0Pu4T0TfKNVBmUKHEQ/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyvJFj0f0IbdeRHXYSHPLOpsZs2ZmjCMrcYjbzhaeCOGk3vlRpQmpWv9a4Tfcf1EsLE_g/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -76,9 +76,16 @@
           cache: "no-store", 
           body: JSON.stringify(data) 
         })
-        .then(response => response.json())
+        .then(response => {
+          if(!response.ok) throw new Error("HTTP Status: " + response.status);
+          return response.json();
+        })
         .then(result => { resolve({ offline: false, data: result }); })
-        .catch(error => { saveToQueue(data); resolve({ offline: true }); });
+        .catch(error => { 
+          console.error("[sendData] Ralat Fetch:", error);
+          saveToQueue(data); 
+          resolve({ offline: true, errorMsg: error.message }); 
+        });
       });
     }
 
@@ -166,7 +173,6 @@
         kat = document.getElementById('kategori').value;
       }
 
-      // VALIDASI WAJIB LOGIN GMAIL UNTUK GURU
       if (kat === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
          showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar masuk sebagai GURU.", "error");
          logoutGuru(true);
@@ -240,7 +246,8 @@
         const result = await sendData(payload);
 
         if (result.offline) {
-          if(!isAuto) showModernAlert("Mod Offline", "Data disimpan dalam telefon.", "info");
+          let errMsg = result.errorMsg ? ("<br><br>Info: " + result.errorMsg) : "";
+          if(!isAuto) showModernAlert("Mod Offline", "Data disimpan dalam telefon." + errMsg, "info");
           localStorage.setItem('ehadir_session', JSON.stringify({nama: nama, kategori: kat, date: getTodayStr(), uuid: uniqueID, avatar: savedAvatar}));
           localStorage.removeItem('ehadir_auto_in_blocked');
           location.reload();
@@ -261,11 +268,13 @@
              document.getElementById('btnMainSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK`;
           }
         }
-
       } catch (error) {
         console.error("Ralat:", error);
         isSubmitting = false;
-        if(!isAuto) document.getElementById('btnMainSubmit').disabled = false;
+        if(!isAuto) {
+            document.getElementById('btnMainSubmit').disabled = false;
+            showModernAlert("Ralat Rangkaian", "Sistem gagal menghubungi server: " + error.message, "error");
+        }
       }
     }
 
@@ -370,7 +379,6 @@
         uuidVal = "MANUAL_OUT_" + Date.now();
       }
       
-      // VALIDASI WAJIB LOGIN GMAIL UNTUK GURU
       if (!isAuto && katVal === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
          showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar keluar sebagai GURU.", "error");
          document.getElementById('guruAuthModal').style.display = 'flex';
@@ -417,12 +425,16 @@
         try {
           const payload = { action: "KELUAR", passcode: PASSCODE, nama: namaVal.toUpperCase(), alasan: alasanValue, lat: lastLat, lng: lastLng, clientTime: new Date().toISOString(), uuid: sessionUUID, locStatus: locStatus };
           
-          await sendData(payload);
+          let result = await sendData(payload);
           
           if(isAuto) {
             showSyncBar("SEMOGA SELAMAT DALAM PERJALANAN ANDA", "#c0392b");
           } else {
-            showModernAlert("Selesai", "Daftar Keluar Berjaya.", "success");
+             if(result.data && result.data.msg) {
+                 showModernAlert("Selesai", result.data.msg, "success");
+             } else {
+                 showModernAlert("Selesai", "Daftar Keluar Berjaya.", "success");
+             }
           }
           
           localStorage.setItem('ehadir_auto_in_blocked', 'true');
@@ -450,6 +462,7 @@
         
         sendData({ action: "KELUAR", passcode: PASSCODE, nama: namaUser, alasan: "Manual Admin", lat: lastLat, lng: lastLng, clientTime: new Date().toISOString(), locStatus: "TIADA" })
         .then(res => { 
+          if(res.data && res.data.result === "success") showModernAlert("Berjaya", "Daftarkan keluar berjaya.", "success");
           loadList(); 
         });
       });
@@ -471,9 +484,10 @@
           showModernAlert("Berjaya", "Data pelawat diterima.", "success");
           setTimeout(() => location.reload(), 1500);
         } else {
-          showModernAlert("Gagal", "Server menolak data.", "error");
+          showModernAlert("Gagal", result.data ? result.data.msg : "Server menolak data.", "error");
           isSubmitting = false;
           document.getElementById('btnPelawatSubmit').disabled = false;
+          document.getElementById('btnPelawatSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> HANTAR DATA`;
         }
       } catch (error) {
         console.error(error);
@@ -549,7 +563,6 @@
         }
 
         if (!session && locked && lockedKat && !isSubmitting && !isSedangHadir && !isSudahKeluar && !isTidakHadir) {
-          // VALIDASI: GURU mesti ada sesi Gmail aktif untuk Auto-Punch In
           if (lockedKat === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
               if (statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) statusEl.innerHTML += ` <br>[AUTO-IN GAGAL: SILA LOGIN GMAIL]`;
               return;
@@ -893,7 +906,7 @@
               showModernAlert("Ralat", res.data ? res.data.msg : "Gagal hantar.", "error");
             }
           } catch(e) {
-            showModernAlert("Ralat", "Gagal menghubungi server.", "error");
+            showModernAlert("Ralat", "Gagal menghubungi server: " + e.message, "error");
           } finally {
             btn.disabled = false;
             btn.innerText = "HANTAR PERMOHONAN";
@@ -973,7 +986,7 @@
                     loadCutiHistory();
                     loadList(); 
                 } else {
-                    showModernAlert("Ralat", "Gagal batal.", "error");
+                    showModernAlert("Ralat", res.data ? res.data.msg : "Gagal batal.", "error");
                 }
             } catch(e) {}
         });
@@ -1531,7 +1544,7 @@
     if (navigator.onLine && 'caches' in window) {
       caches.keys().then(names => {
         for (let name of names) {
-          if (name !== 'ehadir-hybrid-v56-guru') {
+          if (name !== 'ehadir-hybrid-v57-guru') {
             caches.delete(name);
           }
         }
@@ -1709,7 +1722,6 @@
     }
   }
 
-  // --- INTEGRASI GOOGLE LOGIN & PENDAFTARAN GURU ---
   function openHelpModalWithPasscode() {
       showModernAlert("Pengesahan Admin", "Masukkan passcode untuk tetapan:", "prompt", function(pass) {
           if (pass === PASSCODE) {
@@ -1725,7 +1737,7 @@
           google.accounts.id.initialize({
               client_id: GOOGLE_CLIENT_ID,
               callback: handleGoogleLogin,
-              context: "use", // TUKAR PAPARAN TEXT UNTUK LEBIH NATURAL
+              context: "use",
               itp_support: true
           });
           google.accounts.id.renderButton(
@@ -1752,7 +1764,7 @@
           }
 
           document.getElementById('guruAuthModal').style.display = 'none';
-          showSyncBar("Menyemak Akaun Guru...", "#3498db");
+          showSyncBar("Menyemak Akaun Guru dalam Database...", "#3498db");
 
           sendData({action: "VERIFY_GURU", passcode: PASSCODE, email: email})
           .then(res => {
@@ -1762,24 +1774,27 @@
                      let gData = res.data.msg; 
                      lockGuruProfile(email, gData.nama, gData.avatar, gData.fotoUrl, gData.jawatan);
                  } else if(res.data.result === "not_found") {
-                     showModernAlert("Akaun Tidak Ditemui", "Akaun Google anda belum didaftarkan di dalam pangkalan data. Sila klik butang 'Daftar Ahli' untuk daftar buat kali pertama.", "error", function() {
+                     showModernAlert("Akaun Tidak Ditemui", "Akaun Google (" + email + ") belum didaftarkan di dalam pangkalan data E-Hadir. Sila klik butang 'Daftar Ahli' untuk daftar.", "error", function() {
                          document.getElementById('guruAuthModal').style.display = 'flex';
                          renderGoogleBtn();
                      });
                  } else {
-                     showModernAlert("Ralat", res.data.msg, "error", function() {
+                     showModernAlert("Ralat Sistem", "Ralat Semasa Semakan: " + res.data.msg, "error", function() {
                          document.getElementById('guruAuthModal').style.display = 'flex';
                          renderGoogleBtn();
                      });
                  }
              } else {
-                 showModernAlert("Mod Offline", "Sistem tidak dapat menyemak akaun anda tanpa capaian internet.", "error", function() {
+                 let errMsg = res.errorMsg ? ("(" + res.errorMsg + ")") : "";
+                 showModernAlert("Mod Offline / Ralat Rangkaian", "Sistem tidak dapat menyemak akaun anda tanpa capaian internet yang stabil. " + errMsg, "error", function() {
                      document.getElementById('kategori').value = "";
                  });
              }
+          }).catch(err => {
+              showModernAlert("Ralat Kritikal", "Ralat menghubungi server: " + err.message, "error");
           });
       } catch(e) {
-          showModernAlert("Ralat Login", "Gagal membaca token Google.", "error", function() {
+          showModernAlert("Ralat Login", "Gagal membaca token Google: " + e.message, "error", function() {
               document.getElementById('kategori').value = "";
           });
       }
@@ -1878,18 +1893,24 @@
       if(!nama) return showModernAlert("Tiada Nama", "Sila isi nama penuh anda.", "error");
       if(!jawatan) return showModernAlert("Tiada Jawatan", "Sila isi jawatan anda di sekolah.", "error");
 
-      showSyncBar("Mendaftar Akaun...", "#f39c12");
+      showSyncBar("Menyemak & Mendaftar Akaun...", "#f39c12");
       sendData({action: "REGISTER_GURU", passcode: PASSCODE, email: email, nama: nama, jawatan: jawatan, fotoBase64: fotoBase64, avatar: avatar})
       .then(res => {
+         if(res.offline) {
+             showModernAlert("Ralat Internet", "Pendaftaran memerlukan capaian internet aktif. Sila cuba lagi.", "error");
+             return;
+         }
          if(res.data && res.data.result === "success") {
              document.getElementById('guruRegisterModal').style.display = 'none';
-             showModernAlert("Daftar Berjaya", "Akaun anda telah disimpan ke pangkalan data. Sila klik Log Masuk Google untuk mengaktifkan sesi anda.", "success", function() {
+             showModernAlert("Daftar Berjaya", "Akaun anda telah disimpan ke pangkalan data DAFTAR_GURU. Sila klik Log Masuk Google untuk mengaktifkan sesi.", "success", function() {
                  document.getElementById('guruAuthModal').style.display = 'flex';
                  renderGoogleBtn();
              });
          } else {
-             showModernAlert("Ralat Pendaftaran", res.data ? res.data.msg : "Gagal mendaftar.", "error");
+             showModernAlert("Ralat Pendaftaran", res.data ? res.data.msg : "Gagal mendaftar. Tiada maklum balas.", "error");
          }
+      }).catch(err => {
+          showModernAlert("Ralat Rangkaian", "Terputus hubungan dengan server: " + err.message, "error");
       });
   }
 
@@ -2069,7 +2090,6 @@
     let currentKat = sel.value;
     let currentAvatar = localStorage.getItem('ehadir_user_avatar');
     
-    // JIKA GURU NAK KUNCI TAPI BELUM LOGIN GMAIL
     if (currentKat === 'GURU' && !input.readOnly) {
         if (!localStorage.getItem('ehadir_guru_email')) {
             showModernAlert("Akses Ditolak", "Bagi kategori GURU, sila log masuk menggunakan butang Google yang dipaparkan atau butang Daftar Ahli.", "error");
