@@ -1739,6 +1739,7 @@
           
           if(DELIMA_DOMAIN && !email.endsWith(DELIMA_DOMAIN)) {
               showModernAlert("Emel Tidak Sah", "Sila gunakan emel rasmi (@" + DELIMA_DOMAIN + ").", "error");
+              document.getElementById('kategori').value = "";
               return;
           }
 
@@ -1757,13 +1758,16 @@
                      });
                  } else {
                      showModernAlert("Ralat", res.data.msg, "error");
+                     document.getElementById('kategori').value = "";
                  }
              } else {
                  showModernAlert("Mod Offline", "Sistem tidak dapat menyemak akaun anda tanpa capaian internet.", "error");
+                 document.getElementById('kategori').value = "";
              }
           });
       } catch(e) {
           showModernAlert("Ralat Login", "Gagal membaca token Google.", "error");
+          document.getElementById('kategori').value = "";
       }
   }
 
@@ -1906,6 +1910,7 @@
   function closeGuruAuth() {
       document.getElementById('guruAuthModal').style.display = 'none';
       document.getElementById('kategori').value = "";
+      updateScheduleInfo();
   }
 
   function checkKategori() {
@@ -2113,6 +2118,8 @@
       infoBox.classList.remove('pop-in');
       void infoBox.offsetWidth; 
       infoBox.classList.add('pop-in');
+    } else {
+      infoBox.style.display = "none";
     }
   }
 
