@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyQHF00hpdjsZ-bVo6847cUZqOY2Veo-AfauQztFv6LBeVVWPjdW4PIVOrTysyeUbxv2Q/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyvJFj0f0IbdeRHXYSHPLOpsZs2ZmjCMrcYjbzhaeCOGk3vlRpQmpWv9a4Tfcf1EsLE_g/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -102,16 +102,19 @@
       if(typeof updateScheduleInfo === 'function') updateScheduleInfo(); 
     }
 
-    function checkAutoStatus(list) {
+    function checkAutoStatus(list, isOfflineFallback = false) {
+      if (isOfflineFallback || !Array.isArray(list)) return;
       let currentSess = JSON.parse(localStorage.getItem('ehadir_session'));
       let locked = localStorage.getItem('ehadir_locked_name');
       let checkName = locked || (currentSess ? currentSess.nama : null);
       if(!checkName) return;
+      checkName = checkName.toUpperCase().trim();
       
-      let activeRecord = list.find(item => item.nama === checkName && item.kategori !== "CUTI" && (!item.keluar || item.keluar === ""));
+      let safeName = (n) => n ? String(n).toUpperCase().trim() : "";
+      let activeRecord = list.find(item => safeName(item.nama) === checkName && item.kategori !== "CUTI" && (!item.keluar || item.keluar === ""));
 
       if (activeRecord) {
-        if (!currentSess || currentSess.nama !== checkName) {
+        if (!currentSess || currentSess.nama.toUpperCase().trim() !== checkName) {
           localStorage.setItem('ehadir_session', JSON.stringify({
             nama: activeRecord.nama,
             kategori: activeRecord.kategori || "GURU", 
@@ -121,10 +124,12 @@
           checkSession(); 
         }
       } else {
+        let isKeluarRecord = list.find(item => safeName(item.nama) === checkName && item.kategori !== "CUTI" && item.keluar && item.keluar !== "");
         let queue = JSON.parse(localStorage.getItem('ehadir_offline_queue') || "[]");
-        let isPending = queue.some(q => q.nama === checkName && q.action === "MASUK");
+        let isPending = queue.some(q => safeName(q.nama) === checkName && q.action === "MASUK");
         
-        if (currentSess && !isPending) {
+        // MEMASTIKAN SESSION TIDAK TERPADAM SECARA TIDAK SENGAJA
+        if (currentSess && !isPending && isKeluarRecord) {
           localStorage.removeItem('ehadir_session');
           document.getElementById('dashboardPanel').style.display = 'none';
           document.getElementById('defaultForm').style.display = 'block';
@@ -145,8 +150,9 @@
         return;
       }
 
-      let isActive = currentList.some(i => i.nama === checkName && !i.isOffline && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
-      let offlinePending = JSON.parse(localStorage.getItem('ehadir_offline_queue') || "[]").some(q => q.nama === checkName && q.action === "MASUK");
+      let safeName = (n) => n ? String(n).toUpperCase().trim() : "";
+      let isActive = currentList.some(i => safeName(i.nama) === checkName && !i.isOffline && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
+      let offlinePending = JSON.parse(localStorage.getItem('ehadir_offline_queue') || "[]").some(q => safeName(q.nama) === checkName && q.action === "MASUK");
 
       if (isActive || offlinePending) {
         if(btnMasuk) btnMasuk.style.display = 'none'; 
@@ -163,6 +169,15 @@
 
     async function hantarMasuk(isAuto = false) {
       if(isSubmitting) return; 
+
+      if (isAuto) {
+          let lastAuto = localStorage.getItem('ehadir_last_autoin_time');
+          if (lastAuto && (Date.now() - parseInt(lastAuto)) < 60000) {
+              console.log("Auto-In disekat oleh Cooldown 60s.");
+              return; 
+          }
+          localStorage.setItem('ehadir_last_autoin_time', Date.now().toString());
+      }
 
       let nama, kat;
       if (isAuto) {
@@ -185,7 +200,8 @@
          }
       }
 
-      let isAlreadyActive = currentList.some(i => i.nama === nama && !i.isOffline && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
+      let safeName = (n) => n ? String(n).toUpperCase().trim() : "";
+      let isAlreadyActive = currentList.some(i => safeName(i.nama) === nama && !i.isOffline && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
       if (isAlreadyActive) {
         if (!isAuto) showModernAlert("Sesi Aktif", "Anda belum daftar keluar untuk sesi sebelum ini. Sila klik DAFTAR KELUAR.", "error");
         return;
@@ -520,15 +536,28 @@
       let isBlocked = localStorage.getItem('ehadir_auto_in_blocked'); 
 
       let checkName = locked || (session ? session.nama : null);
+      if (checkName) checkName = checkName.toUpperCase().trim();
       
+      let safeName = (n) => n ? String(n).toUpperCase().trim() : "";
       let isSedangHadir = false;
       let isSudahKeluar = false;
       let isTidakHadir = false;
       
       if (checkName) {
-        isSedangHadir = currentList.some(i => i.nama === checkName && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
-        isSudahKeluar = currentList.some(i => i.nama === checkName && i.kategori !== "CUTI" && i.keluar && i.keluar !== "");
-        isTidakHadir = currentList.some(i => i.nama === checkName && i.kategori === "CUTI");
+        isSedangHadir = currentList.some(i => safeName(i.nama) === checkName && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
+        isSudahKeluar = currentList.some(i => safeName(i.nama) === checkName && i.kategori !== "CUTI" && i.keluar && i.keluar !== "");
+        isTidakHadir = currentList.some(i => safeName(i.nama) === checkName && i.kategori === "CUTI");
+
+        // MEMASTIKAN AUTO-IN TERSEKAT JIKA SESSION MASIH ADA BAGI NAMA TERSEBUT
+        if (session && session.nama && safeName(session.nama) === checkName) {
+            isSedangHadir = true;
+        }
+      }
+
+      // LOGIK KAWALAN PENGHALANG
+      if (isSedangHadir) {
+          localStorage.setItem('ehadir_auto_in_blocked', 'true');
+          isBlocked = true;
       }
 
       if (isInZone) {
@@ -551,6 +580,7 @@
                statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-IN DISABLE (KELUAR > ${RADIUS_RESET_AUTO_IN}M UNTUK RESET)</span>`;
              }
            }
+           inZoneStart = 0; // HENTIKAN TIMER AUTO-IN
            return; 
          }
       } else {
@@ -589,6 +619,8 @@
               inZoneStart = 0; 
             }
           }
+        } else {
+          inZoneStart = 0;
         }
       } 
       else {
@@ -1465,7 +1497,8 @@
           <input type="text" id="cutiNama" placeholder="NAMA PENUH" style="text-transform:uppercase">
           <select id="cutiKategori">
               <option value="" disabled selected>-- PEKERJAAN --</option>
-              <option value="GURU">GURU</option>
+              <option value="GURU">
+GURU</option>
               <option value="AKP">AKP</option>
               <option value="KEBERSIHAN">KEBERSIHAN</option>
           </select>
@@ -2328,10 +2361,13 @@
       currentList = [...offlineItems, ...serverItems];
       renderList(currentList);
       if (!isHistory) {
-        checkAutoStatus(currentList);
+        checkAutoStatus(currentList, false);
         validateFormState();
       }
-    }).catch(() => { renderList(offlineItems); });
+    }).catch(() => { 
+      currentList = offlineItems;
+      renderList(currentList); 
+    });
   }
 
   function renderList(items) {
