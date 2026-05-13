@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Sistem Pelawat & Kehadiran v39.3 (Integrasi Cikgu Google Auth Fix & Error Tracking)</title>
+  <title>Sistem Pelawat & Kehadiran v39.4 (Integrasi KPM Google Log Aktif & Fix)</title>
   
   <!-- GOOGLE IDENTITY SERVICES UNTUK LOGIN GMAIL -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxsQqegAzr90Prb-tUlTTDthhlGi1KC6V6Bp5qds5uApTLQt3tr5CSi1xWHXomoAMx-Gg/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyvJFj0f0IbdeRHXYSHPLOpsZs2ZmjCMrcYjbzhaeCOGk3vlRpQmpWv9a4Tfcf1EsLE_g/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -172,11 +172,17 @@
         nama = document.getElementById('nama').value.toUpperCase().trim();
         kat = document.getElementById('kategori').value;
       }
-
-      if (kat === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
-         showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar masuk sebagai GURU.", "error");
-         logoutGuru(true);
-         return;
+      
+      let userEmail = "";
+      if (kat === 'GURU') {
+         userEmail = localStorage.getItem('ehadir_guru_email');
+         if (!userEmail) {
+             showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar masuk sebagai GURU.", "error", function() {
+                 document.getElementById('guruAuthModal').style.display = 'flex';
+                 renderGoogleBtn();
+             });
+             return;
+         }
       }
 
       let isAlreadyActive = currentList.some(i => i.nama === nama && !i.isOffline && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
@@ -241,7 +247,7 @@
       try {
         let savedAvatar = localStorage.getItem('ehadir_user_avatar') || "";
         let uniqueID = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-        const payload = { action: "MASUK", passcode: PASSCODE, nama: nama, kategori: kat, alasan: alasan, lat: lastLat, lng: lastLng, clientTime: now.toISOString(), uuid: uniqueID, avatar: savedAvatar };
+        const payload = { action: "MASUK", passcode: PASSCODE, nama: nama, kategori: kat, alasan: alasan, lat: lastLat, lng: lastLng, clientTime: now.toISOString(), uuid: uniqueID, avatar: savedAvatar, email: userEmail };
         
         const result = await sendData(payload);
 
@@ -262,7 +268,10 @@
             }
           } else {
              let msg = (result.data && result.data.msg) ? result.data.msg : "Data gagal masuk ke Google Sheet. Sila cuba lagi.";
-             if(!isAuto) showModernAlert("Gagal", msg, "error");
+             let cb = null;
+             if(msg.includes("Log Keluar") || msg.includes("Log keluar")) cb = function() { logoutGuru(true); };
+             
+             if(!isAuto) showModernAlert("Gagal", msg, "error", cb);
              isSubmitting = false;
              document.getElementById('btnMainSubmit').disabled = false;
              document.getElementById('btnMainSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK`;
@@ -327,6 +336,7 @@
 
       let session = JSON.parse(localStorage.getItem('ehadir_session'));
       let namaVal, katVal, uuidVal;
+      let userEmail = localStorage.getItem('ehadir_guru_email') || "";
 
       if (!isAuto && !session) {
         let iName = document.getElementById('nama') ? document.getElementById('nama').value.toUpperCase().trim() : "";
@@ -379,7 +389,7 @@
         uuidVal = "MANUAL_OUT_" + Date.now();
       }
       
-      if (!isAuto && katVal === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
+      if (!isAuto && katVal === 'GURU' && !userEmail) {
          showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar keluar sebagai GURU.", "error");
          document.getElementById('guruAuthModal').style.display = 'flex';
          renderGoogleBtn();
@@ -423,7 +433,7 @@
         }
 
         try {
-          const payload = { action: "KELUAR", passcode: PASSCODE, nama: namaVal.toUpperCase(), alasan: alasanValue, lat: lastLat, lng: lastLng, clientTime: new Date().toISOString(), uuid: sessionUUID, locStatus: locStatus };
+          const payload = { action: "KELUAR", passcode: PASSCODE, nama: namaVal.toUpperCase(), alasan: alasanValue, lat: lastLat, lng: lastLng, clientTime: new Date().toISOString(), uuid: sessionUUID, locStatus: locStatus, email: userEmail };
           
           let result = await sendData(payload);
           
@@ -1254,7 +1264,7 @@
   <div id="guruRegisterModal">
     <div class="custom-modal-content">
       <div class="modal-title" style="color:#27ae60;">DAFTAR AKAUN GURU</div>
-      <div class="modal-msg">Sila lengkapkan profil anda di bawah.</div>
+      <div class="modal-msg">Sila lengkapkan profil anda di bawah. Jika emel telah wujud, data akan dikemaskini.</div>
       <input type="email" id="regGuruEmail" readonly style="text-align:center; color:#55719e; margin-bottom:10px; font-weight:bold; background:#e0eafc;">
       <input type="text" id="regGuruName" placeholder="NAMA PENUH (HURUF BESAR)" style="text-transform:uppercase; margin-bottom:10px;">
       <input type="text" id="regGuruJawatan" placeholder="JAWATAN DI SEKOLAH" style="text-transform:uppercase; margin-bottom:10px;">
@@ -1269,7 +1279,7 @@
 
       <div class="modal-btn-row">
         <button class="modal-btn btn-cancel-modal" onclick="document.getElementById('guruRegisterModal').style.display='none'; closeGuruAuth();">Batal</button>
-        <button class="modal-btn btn-ok" style="background:#27ae60; box-shadow:0 6px #1e8449;" onclick="submitGuruRegistration()">Daftar & Masuk</button>
+        <button class="modal-btn btn-ok" style="background:#27ae60; box-shadow:0 6px #1e8449;" onclick="submitGuruRegistration()">Daftar / Kemaskini</button>
       </div>
     </div>
   </div>
@@ -1544,7 +1554,7 @@
     if (navigator.onLine && 'caches' in window) {
       caches.keys().then(names => {
         for (let name of names) {
-          if (name !== 'ehadir-hybrid-v57-guru') {
+          if (name !== 'ehadir-hybrid-v58-guru') {
             caches.delete(name);
           }
         }
@@ -1902,7 +1912,7 @@
          }
          if(res.data && res.data.result === "success") {
              document.getElementById('guruRegisterModal').style.display = 'none';
-             showModernAlert("Daftar Berjaya", "Akaun anda telah disimpan ke pangkalan data DAFTAR_GURU. Sila klik Log Masuk Google untuk mengaktifkan sesi.", "success", function() {
+             showModernAlert("Berjaya", res.data.msg || "Akaun anda telah disimpan ke pangkalan data. Sila klik Log Masuk Google untuk mengaktifkan sesi.", "success", function() {
                  document.getElementById('guruAuthModal').style.display = 'flex';
                  renderGoogleBtn();
              });
@@ -1932,7 +1942,7 @@
       if(force) {
           proceed();
       } else {
-          showModernAlert("Pengesahan", "Adakah anda pasti untuk log keluar akaun profil Guru ini (Log keluar Gmail)?<br>Sesi akan ditamatkan sepenuhnya.", "confirm", proceed);
+          showModernAlert("Pengesahan", "Adakah anda pasti untuk log keluar akaun profil Guru ini (Log keluar Gmail)?<br>Sesi akan ditamatkan dan nama akan dikosongkan sepenuhnya.", "confirm", proceed);
       }
   }
 
@@ -1943,6 +1953,13 @@
       localStorage.removeItem('ehadir_user_avatar');
       localStorage.removeItem('ehadir_session');
       localStorage.removeItem('ehadir_temp_avatar');
+      localStorage.removeItem('ehadir_auto_in_blocked');
+
+      let inputNama = document.getElementById('nama');
+      let inputKat = document.getElementById('kategori');
+      if(inputNama) inputNama.value = "";
+      if(inputKat) inputKat.value = "";
+
       location.reload();
   }
 
