@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbx9u_bCEY9H1ub8CG5KnEtEH_eMlYue02HKN1RK7UYKn9tr5WZpKtsDQc-O35YGv-zivQ/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyvJFj0f0IbdeRHXYSHPLOpsZs2ZmjCMrcYjbzhaeCOGk3vlRpQmpWv9a4Tfcf1EsLE_g/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -1640,31 +1640,36 @@
     mTitle.innerText = title;
     mMsg.innerHTML = msg; 
     
+    if(callback) {
+      window.tempCallback = callback;
+    } else {
+      window.tempCallback = null;
+    }
+
+    let btnAction = callback ? 'confirmAction()' : 'closeCustomModal()';
+
     if(type === 'error') {
       mIcon.innerText = "❌"; mTitle.style.color = "#c0392b";
-      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="closeCustomModal()">Faham</button>`;
+      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="${btnAction}">Faham</button>`;
     } else if(type === 'success') {
       mIcon.innerText = "👍"; mTitle.style.color = "#27ae60";
-      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="closeCustomModal()">Terbaik</button>`;
+      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="${btnAction}">Terbaik</button>`;
     } else if(type === 'info') {
       mIcon.innerText = "ℹ️"; mTitle.style.color = "#3498db";
-      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="closeCustomModal()">OK</button>`;
+      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="${btnAction}">OK</button>`;
     } else if(type === 'confirm') {
       mIcon.innerText = "🤔"; mTitle.style.color = "#1e3c72";
-      window.tempCallback = callback;
       mBtns.innerHTML = `<button class="modal-btn btn-cancel-modal" onclick="closeCustomModal()">Batal</button><button class="modal-btn btn-ok" onclick="confirmAction()">Teruskan</button>`;
     } else if(type === 'prompt') {
       mIcon.innerText = "🔐"; mTitle.style.color = "#1e3c72";
-      window.tempCallback = callback;
       mMsg.innerHTML = msg + `<br><br><input type="password" id="customPromptInput" style="width:100%; padding:15px; border-radius:15px; border:2px solid #d1def0; font-family:inherit; text-align:center; box-shadow:inset 0 3px 6px rgba(0,0,0,0.05);" placeholder="Masukkan Passcode">`;
       mBtns.innerHTML = `<button class="modal-btn btn-cancel-modal" onclick="closeCustomModal()">Batal</button><button class="modal-btn btn-ok" onclick="submitPrompt()">Sahkan</button>`;
     } else if(type === 'gps') {
       mIcon.innerText = "📍"; mTitle.style.color = "#c0392b";
-      window.tempCallback = callback;
       mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="confirmAction()" style="background:linear-gradient(145deg, #f2c94c, #f2994a); color:white; font-size:14px; box-shadow:0 6px #b8732e;">↻ SEMAK GPS SEKARANG</button>`;
     } else {
       mIcon.innerText = "💡"; mTitle.style.color = "#1e3c72";
-      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="closeCustomModal()">Tutup</button>`;
+      mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="${btnAction}">Tutup</button>`;
     }
     modal.style.display = "flex";
 
@@ -1736,10 +1741,13 @@
       try {
           let payload = JSON.parse(atob(response.credential.split('.')[1]));
           let email = payload.email;
+          window.tempGooglePayload = { email: email, name: payload.name, picture: payload.picture };
           
           if(DELIMA_DOMAIN && !email.endsWith(DELIMA_DOMAIN)) {
-              showModernAlert("Emel Tidak Sah", "Sila gunakan emel rasmi (@" + DELIMA_DOMAIN + ").", "error");
-              document.getElementById('kategori').value = "";
+              showModernAlert("Emel Tidak Sah", "Sila gunakan emel rasmi (@" + DELIMA_DOMAIN + ").", "error", function() {
+                  document.getElementById('guruAuthModal').style.display = 'flex';
+                  renderGoogleBtn();
+              });
               return;
           }
 
@@ -1750,24 +1758,30 @@
           .then(res => {
              if(!res.offline && res.data) {
                  if(res.data.result === "success") {
+                     window.tempGooglePayload = null;
                      let gData = res.data.msg; 
                      lockGuruProfile(email, gData.nama, gData.avatar, gData.fotoUrl, gData.jawatan);
                  } else if(res.data.result === "not_found") {
                      showModernAlert("Akaun Tidak Ditemui", "Akaun Google anda belum didaftarkan di dalam pangkalan data. Sila klik butang 'Daftar Ahli' untuk daftar buat kali pertama.", "error", function() {
-                         openGuruRegistration(email, payload.name, payload.picture);
+                         document.getElementById('guruAuthModal').style.display = 'flex';
+                         renderGoogleBtn();
                      });
                  } else {
-                     showModernAlert("Ralat", res.data.msg, "error");
-                     document.getElementById('kategori').value = "";
+                     showModernAlert("Ralat", res.data.msg, "error", function() {
+                         document.getElementById('guruAuthModal').style.display = 'flex';
+                         renderGoogleBtn();
+                     });
                  }
              } else {
-                 showModernAlert("Mod Offline", "Sistem tidak dapat menyemak akaun anda tanpa capaian internet.", "error");
-                 document.getElementById('kategori').value = "";
+                 showModernAlert("Mod Offline", "Sistem tidak dapat menyemak akaun anda tanpa capaian internet.", "error", function() {
+                     document.getElementById('kategori').value = "";
+                 });
              }
           });
       } catch(e) {
-          showModernAlert("Ralat Login", "Gagal membaca token Google.", "error");
-          document.getElementById('kategori').value = "";
+          showModernAlert("Ralat Login", "Gagal membaca token Google.", "error", function() {
+              document.getElementById('kategori').value = "";
+          });
       }
   }
 
@@ -1785,7 +1799,11 @@
 
   function openManualRegister() {
       document.getElementById('guruAuthModal').style.display = 'none';
-      openGuruRegistration("", "", "");
+      if (window.tempGooglePayload) {
+          openGuruRegistration(window.tempGooglePayload.email, window.tempGooglePayload.name, window.tempGooglePayload.picture);
+      } else {
+          openGuruRegistration("", "", "");
+      }
   }
 
   function openGuruRegistration(email, gName, gPic) {
@@ -1910,6 +1928,7 @@
   function closeGuruAuth() {
       document.getElementById('guruAuthModal').style.display = 'none';
       document.getElementById('kategori').value = "";
+      window.tempGooglePayload = null;
       updateScheduleInfo();
   }
 
