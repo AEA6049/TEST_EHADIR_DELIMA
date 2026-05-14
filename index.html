@@ -420,36 +420,13 @@
       let alasanValue = isAuto ? "AUTO CHECKOUT (KELUAR KAWASAN)" : "PULANG (MANUAL)";
       let sessionUUID = uuidVal;
 
-      let proceed = async () => {
+      let proceedCheckoutAPI = async (finalAlasan) => {
         isSubmitting = true; 
-        let locStatus = "TIADA";
-
-        if(!isAuto) { 
-          let btn = document.getElementById('btnKeluar') || document.getElementById('btnKeluarMain');
-          if(btn) { btn.disabled = true; btn.innerText = "MENCARI GPS (3s)..."; }
-          
-          try {
-            await new Promise((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(pos => {
-                let d = calcDist(pos.coords.latitude, pos.coords.longitude, SCHOOL_LAT, SCHOOL_LNG);
-                locStatus = (d <= RADIUS_METER) ? "DALAM" : "LUAR";
-                lastLat = pos.coords.latitude;
-                lastLng = pos.coords.longitude;
-                resolve();
-              }, err => {
-                reject();
-              }, { enableHighAccuracy: true, timeout: 3000, maximumAge: 0 });
-            });
-          } catch(e) {
-            locStatus = "TIADA";
-          }
-          if(btn) btn.innerText = "SEDANG HANTAR...";
-        } else {
-          locStatus = "LUAR";
-        }
-
+        let btn = document.getElementById('btnKeluar') || document.getElementById('btnKeluarMain');
+        if(btn) { btn.disabled = true; btn.innerText = "SEDANG HANTAR..."; }
+        
         try {
-          const payload = { action: "KELUAR", passcode: PASSCODE, nama: namaVal.toUpperCase(), alasan: alasanValue, lat: lastLat, lng: lastLng, clientTime: new Date().toISOString(), uuid: sessionUUID, locStatus: locStatus, email: userEmail };
+          const payload = { action: "KELUAR", passcode: PASSCODE, nama: namaVal.toUpperCase(), alasan: finalAlasan, lat: lastLat, lng: lastLng, clientTime: new Date().toISOString(), uuid: sessionUUID, locStatus: window.tempLocStatus || "TIADA", email: userEmail };
           
           let result = await sendData(payload);
           
@@ -475,8 +452,62 @@
         }
       };
 
+      let proceed = async () => {
+        isSubmitting = true; 
+        let locStatus = "TIADA";
+
+        if(!isAuto) { 
+          let btn = document.getElementById('btnKeluar') || document.getElementById('btnKeluarMain');
+          if(btn) { btn.disabled = true; btn.innerText = "MENCARI GPS (3s)..."; }
+          
+          try {
+            await new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(pos => {
+                let d = calcDist(pos.coords.latitude, pos.coords.longitude, SCHOOL_LAT, SCHOOL_LNG);
+                locStatus = (d <= RADIUS_METER) ? "DALAM" : "LUAR";
+                lastLat = pos.coords.latitude;
+                lastLng = pos.coords.longitude;
+                resolve();
+              }, err => {
+                reject();
+              }, { enableHighAccuracy: true, timeout: 3000, maximumAge: 0 });
+            });
+          } catch(e) {
+            locStatus = "TIADA";
+          }
+        } else {
+          locStatus = "LUAR";
+        }
+
+        window.tempLocStatus = locStatus;
+
+        if (!isAuto && locStatus === "LUAR") {
+            isSubmitting = false;
+            let btn = document.getElementById('btnKeluar') || document.getElementById('btnKeluarMain');
+            if(btn) { btn.disabled = false; btn.innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/3580/3580154.png" class="icon-3d-std"> DAFTAR KELUAR`; }
+            
+            showModernAlert(
+                "Luar Kawasan Dikesan", 
+                "Anda dikesan berada di luar kawasan pejabat. Jika anda mempunyai urusan rasmi, sila isi borang keberadaan dan maklumkan kepada pentadbir.", 
+                "out_of_zone", 
+                function(action) {
+                    if (action === 'borang') {
+                        document.getElementById('dashboardPanel').style.display = 'none';
+                        document.getElementById('defaultForm').style.display = 'none';
+                        document.getElementById('cutiMainPanel').style.display = 'block';
+                        showBorangCuti('KELUAR');
+                    } else if (action === 'habis_kerja') {
+                        proceedCheckoutAPI("PULANG [LUAR KAWASAN]");
+                    }
+                }
+            );
+        } else {
+            proceedCheckoutAPI(alasanValue);
+        }
+      };
+
       if(!isAuto) {
-        showModernAlert("Pengesahan", "Daftar keluar sekarang?", "confirm", proceed);
+        showModernAlert("Pengesahan", "Daftar keluar sekarang?", "confirm", function() { proceed(); });
       } else {
         proceed();
       }
@@ -767,7 +798,7 @@
       isCutiModeActive = true;
       showModernAlert(
         "PERINGATAN MESRA", 
-        "Sila rancang cuti anda, maklumkan pada Pentadbir terlebih dahulu, dan jangan lupa terus kemaskini di HRMIS. Jika TUAN/PUAN ada urusan lain juga boleh isi ke dalam sistem ini sebagai makluman keberadaan. ", 
+        "Sila rancang keberadaan anda, maklumkan pada Pentadbir terlebih dahulu, dan jangan lupa terus kemaskini di HRMIS jika berkaitan. Jika TUAN/PUAN ada urusan lain juga boleh isi ke dalam sistem ini sebagai makluman keberadaan.", 
         "info",
         null
       );
@@ -787,19 +818,52 @@
       loadCutiHistory();
     }
 
-    function showBorangCuti() {
+    function showBorangCuti(type = 'CUTI') {
       document.getElementById('cutiMainPanel').style.display = 'none';
       document.getElementById('borangCutiPanel').style.display = 'block';
+
+      let notis = document.getElementById('notisKeluarBekerja');
+      let jenis = document.getElementById('cutiJenis');
+      let tajuk = document.getElementById('tajukBorangCuti');
+      
       let lName = localStorage.getItem('ehadir_locked_name') || (document.getElementById('nama') ? document.getElementById('nama').value : "");
       let lKat = localStorage.getItem('ehadir_locked_kat') || (document.getElementById('kategori') ? document.getElementById('kategori').value : "");
-      if(lName) {
-          document.getElementById('cutiNama').value = lName;
-          if(lKat) document.getElementById('cutiKategori').value = lKat;
+      
+      let namaEl = document.getElementById('cutiNama');
+      let katEl = document.getElementById('cutiKategori');
+      
+      namaEl.value = lName;
+      katEl.value = lKat;
+      
+      namaEl.readOnly = true;
+      namaEl.style.background = '#e0eafc';
+      katEl.style.pointerEvents = 'none';
+      katEl.style.background = '#e0eafc';
+
+      if (type === 'KELUAR') {
+         notis.style.display = 'block';
+         jenis.value = 'KELUAR SEMASA BEKERJA';
+         jenis.readOnly = true;
+         jenis.style.background = '#e0eafc';
+         tajuk.innerHTML = 'BORANG PERMOHONAN KELUAR SEMASA BEKERJA';
+         document.getElementById('cutiDateContainer').style.display = 'none';
+         document.getElementById('keluarTimeContainer').style.display = 'block';
+         document.getElementById('cutiTarikhReadOnly').value = getTodayStr();
+      } else {
+         notis.style.display = 'none';
+         jenis.value = '';
+         jenis.readOnly = false;
+         jenis.style.background = '#f5f8fa';
+         tajuk.innerHTML = 'BORANG PERMOHONAN KEBERADAAN / CUTI';
+         document.getElementById('cutiDateContainer').style.display = 'flex';
+         document.getElementById('keluarTimeContainer').style.display = 'none';
       }
+
       if (document.getElementById('cutiBuktiInput')) document.getElementById('cutiBuktiInput').value = "";
       if (document.getElementById('cutiBuktiBase64')) document.getElementById('cutiBuktiBase64').value = "";
       if (document.getElementById('cutiBuktiPreview')) document.getElementById('cutiBuktiPreview').style.display = 'none';
       if (document.getElementById('cutiBuktiFilename')) document.getElementById('cutiBuktiFilename').style.display = 'none';
+      document.getElementById('cutiMasa').value = "";
     }
 
     function cancelBorangCuti() {
@@ -891,8 +955,6 @@
     function submitCutiForm() {
       let nama = document.getElementById('cutiNama').value.toUpperCase().trim();
       let kategori = document.getElementById('cutiKategori').value;
-      let tarikhMulaRaw = document.getElementById('cutiMula').value;
-      let tarikhTamatRaw = document.getElementById('cutiTamat').value;
       let jenisCuti = document.getElementById('cutiJenis').value.trim();
       let alasan = document.getElementById('cutiAlasan').value.trim();
       let buktiBase64 = document.getElementById('cutiBuktiBase64') ? document.getElementById('cutiBuktiBase64').value : "";
@@ -900,21 +962,41 @@
       let fileInput = document.getElementById('cutiBuktiInput');
       let fileName = (fileInput && fileInput.files && fileInput.files.length > 0) ? fileInput.files[0].name : "";
 
-      if(!nama || !kategori || !tarikhMulaRaw || !tarikhTamatRaw || !jenisCuti || !alasan) {
-        showModernAlert("Tidak Lengkap", "Sila isi semua ruangan borang cuti.", "error");
-        return;
-      }
-      if(tarikhMulaRaw > tarikhTamatRaw) {
-        showModernAlert("Ralat Tarikh", "Tarikh Tamat mestilah sama atau selepas Tarikh Mula.", "error");
-        return;
+      let tarikhMula, tarikhTamat;
+      let isKeluar = jenisCuti === 'KELUAR SEMASA BEKERJA';
+
+      if (isKeluar) {
+          tarikhMula = getTodayStr();
+          tarikhTamat = getTodayStr();
+          let masa = document.getElementById('cutiMasa').value.trim();
+          if (!masa) {
+              showModernAlert("Tidak Lengkap", "Sila isi Tempoh / Masa Keluar.", "error");
+              return;
+          }
+          alasan = "[Masa: " + masa + "] " + alasan;
+      } else {
+          let tarikhMulaRaw = document.getElementById('cutiMula').value;
+          let tarikhTamatRaw = document.getElementById('cutiTamat').value;
+          if(!tarikhMulaRaw || !tarikhTamatRaw) {
+              showModernAlert("Tidak Lengkap", "Sila isi semua ruangan tarikh.", "error");
+              return;
+          }
+          if(tarikhMulaRaw > tarikhTamatRaw) {
+              showModernAlert("Ralat Tarikh", "Tarikh Tamat mestilah sama atau selepas Tarikh Mula.", "error");
+              return;
+          }
+          tarikhMula = tarikhMulaRaw.split('-').reverse().join('.');
+          tarikhTamat = tarikhTamatRaw.split('-').reverse().join('.');
       }
 
-      let tarikhMula = tarikhMulaRaw.split('-').reverse().join('.');
-      let tarikhTamat = tarikhTamatRaw.split('-').reverse().join('.');
+      if(!nama || !kategori || !jenisCuti || !alasan) {
+        showModernAlert("Tidak Lengkap", "Sila isi semua ruangan borang keberadaan.", "error");
+        return;
+      }
 
       showModernAlert(
         "Pengesahan Pentadbir", 
-        "Sila maklumkan kepada Ketua Jabatan anda terlebih dahulu sebelum memohon cuti ini. Teruskan?", 
+        "Sila maklumkan kepada Ketua Jabatan anda terlebih dahulu sebelum memohon / merekodkan keberadaan ini. Teruskan?", 
         "confirm", 
         async function() {
           let btn = document.getElementById('btnSubmitCuti');
@@ -936,7 +1018,7 @@
             };
             let res = await sendData(payload);
             if(!res.offline && res.data && res.data.result === "success") {
-              showModernAlert("Berjaya", "Permohonan cuti telah dihantar.", "success");
+              showModernAlert("Berjaya", "Permohonan / rekod keberadaan telah dihantar.", "success");
               document.getElementById('borangCutiPanel').style.display = 'none';
               document.getElementById('cutiMainPanel').style.display = 'block';
               if (document.getElementById('cutiBuktiInput')) document.getElementById('cutiBuktiInput').value = "";
@@ -971,7 +1053,7 @@
         let json = await res.json();
         let list = json.data || json;
         if(list.length === 0) {
-            container.innerHTML = "<div style='padding:10px;text-align:center;font-size:12px;color:#7f8c8d;'>Tiada rekod cuti ditemui.</div>";
+            container.innerHTML = "<div style='padding:10px;text-align:center;font-size:12px;color:#7f8c8d;'>Tiada rekod keberadaan ditemui.</div>";
             return;
         }
         let html = "";
@@ -987,7 +1069,7 @@
             let mulaObj = parseDateStringDDMMYYYY(i.tarikhMula);
             let btnBatal = "";
             if(!isBatal && mulaObj > todayObj) {
-                btnBatal = `<button onclick="batalCutiAction('${i.uuid}', '${i.tarikhMula}')" style="margin-top:5px;background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;font-size:10px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">Batal Cuti</button>`;
+                btnBatal = `<button onclick="batalCutiAction('${i.uuid}', '${i.tarikhMula}')" style="margin-top:5px;background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;font-size:10px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">Batal Rekod</button>`;
             }
             let btnBukti = (i.buktiUrl && i.buktiUrl.length > 10) ? `<button onclick="window.open('${i.buktiUrl}', '_blank')" style="margin-top:5px; margin-left:5px; background:#3498db;color:white;border:none;padding:5px 10px;border-radius:5px;font-size:10px;cursor:pointer; display:inline-flex; align-items:center; gap:4px;box-shadow:0 2px 4px rgba(0,0,0,0.2);"><img src="https://cdn-icons-png.flaticon.com/128/7268/7268609.png" style="width:12px; height:12px;"> Muat Turun Lampiran</button>` : `<span style="font-size:10px; color:#999; margin-left:5px; margin-top:5px;">Tiada Lampiran</span>`;
             let alasanText = i.alasan ? `<div style="color:#55719e; font-style:italic; margin-bottom:5px; font-size:11px;">Sebab: ${i.alasan}</div>` : "";
@@ -1017,14 +1099,14 @@
         todayObj.setHours(0,0,0,0);
         let mulaObj = parseDateStringDDMMYYYY(tarikhMula);
         if(mulaObj <= todayObj) {
-            showModernAlert("Dilarang", "Anda tidak boleh membatalkan cuti untuk tarikh hari ini atau yang lepas.", "error");
+            showModernAlert("Dilarang", "Anda tidak boleh membatalkan rekod untuk tarikh hari ini atau yang lepas.", "error");
             return;
         }
-        showModernAlert("Pengesahan", "Adakah anda pasti untuk membatalkan cuti ini?", "confirm", async function() {
+        showModernAlert("Pengesahan", "Adakah anda pasti untuk membatalkan rekod keberadaan ini?", "confirm", async function() {
             try {
                 let res = await sendData({action: "BATAL_CUTI", uuid: uuid, passcode: PASSCODE});
                 if(!res.offline && res.data && res.data.result === "success") {
-                    showModernAlert("Berjaya", "Cuti dibatalkan.", "success");
+                    showModernAlert("Berjaya", "Rekod dibatalkan.", "success");
                     loadCutiHistory();
                     loadList(); 
                 } else {
@@ -1041,7 +1123,7 @@
             return;
         }
 
-        showModernAlert("Log Masuk Admin", "Masukkan passcode untuk pengurusan cuti:", "prompt", function(pass) {
+        showModernAlert("Log Masuk Admin", "Masukkan passcode untuk pengurusan keberadaan:", "prompt", function(pass) {
             if (pass !== PASSCODE) { showModernAlert("Akses Ditolak", "Passcode salah.", "error"); return; }
             
             sessionStorage.setItem('adminNameCuti', lockedName.toUpperCase());
@@ -1065,13 +1147,13 @@
             let json = await res.json();
             let list = json.data || json;
             if(list.length === 0) {
-                container.innerHTML = "<div style='padding:10px;text-align:center;font-size:12px;color:#7f8c8d;'>Tiada rekod cuti aktif.</div>";
+                container.innerHTML = "<div style='padding:10px;text-align:center;font-size:12px;color:#7f8c8d;'>Tiada rekod keberadaan aktif.</div>";
                 return;
             }
             let html = "";
             list.forEach(i => {
                 let isSah = i.statusPengesahan === "DISAHKAN";
-                let btnSah = !isSah ? `<button onclick="sahkanCuti('${i.uuid}')" style="margin-top:5px;background:#3498db;color:white;border:none;padding:5px 10px;border-radius:5px;font-size:10px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">Sahkan Cuti</button>` : `<span style='color:#27ae60;font-size:10px;font-weight:bold;'>DISAHKAN OLEH: ${i.adminPengesah} ✔️</span>`;
+                let btnSah = !isSah ? `<button onclick="sahkanCuti('${i.uuid}')" style="margin-top:5px;background:#3498db;color:white;border:none;padding:5px 10px;border-radius:5px;font-size:10px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">Sahkan Rekod</button>` : `<span style='color:#27ae60;font-size:10px;font-weight:bold;'>DISAHKAN OLEH: ${i.adminPengesah} ✔️</span>`;
                 
                 let btnBukti = (i.buktiUrl && i.buktiUrl.length > 10) ? `<button onclick="viewCutiBukti('${i.buktiUrl}')" style="margin-top:5px; margin-left:5px; background:#1e3c72;color:white;border:none;padding:5px 10px;border-radius:5px;font-size:10px;cursor:pointer; display:inline-flex; align-items:center; gap:4px;box-shadow:0 2px 4px rgba(0,0,0,0.2);"><img src="https://cdn-icons-png.flaticon.com/128/7268/7268609.png" style="width:12px; height:12px;"> Lihat Lampiran</button>` : `<span style="font-size:10px; color:#999; margin-left:5px;">Tiada Lampiran</span>`;
 
@@ -1412,7 +1494,7 @@
         
         <div style="margin-top: 20px; border-top: 2px solid #e0eafc; padding-top: 20px; display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <button id="btnCutiDash" class="btn btn-turquoise" onclick="openCutiWorkflow()" style="margin-top:0; margin-bottom:0; font-size:12px;">
-            <img src="https://cdn-icons-png.flaticon.com/128/883/883356.png" class="icon-3d-std"> URUS CUTI
+            <img src="https://cdn-icons-png.flaticon.com/128/883/883356.png" class="icon-3d-std"> URUS KEBERADAAN
           </button>
           <button class="btn btn-pelawat" onclick="showPelawatForm()" style="margin-top:0; margin-bottom:0; font-size:12px;">
             <img src="https://cdn-icons-png.flaticon.com/128/3135/3135768.png" class="icon-3d-std"> PELAWAT
@@ -1465,7 +1547,7 @@
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:15px;">
           <button id="btnCutiMain" class="btn btn-turquoise" onclick="openCutiWorkflow()" style="margin-top:0; margin-bottom:0;">
-            <img src="https://cdn-icons-png.flaticon.com/128/883/883356.png" class="icon-3d-std"> MOHON CUTI
+            <img src="https://cdn-icons-png.flaticon.com/128/883/883356.png" class="icon-3d-std"> KEBERADAAN
           </button>
           <button id="btnPelawatMain" class="btn btn-pelawat" onclick="showPelawatForm()" style="margin-top:0; margin-bottom:0;">
             <img src="https://cdn-icons-png.flaticon.com/128/3135/3135768.png" class="icon-3d-std"> PELAWAT
@@ -1481,8 +1563,11 @@
           <div style="text-align:right; margin-bottom:15px;">
               <span onclick="adminCutiLogin()" style="cursor:pointer; font-size:11px; color:#1e3c72; text-decoration:underline; font-weight:700;">Akses Admin</span>
           </div>
-          <button class="btn btn-turquoise" onclick="showBorangCuti()">
-              <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" class="icon-3d-std"> BORANG PERMOHONAN
+          <button class="btn btn-turquoise" onclick="showBorangCuti('CUTI')">
+              <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" class="icon-3d-std"> BORANG KEBERADAAN (CUTI/KURSUS DLL)
+          </button>
+          <button class="btn btn-yellow" onclick="showBorangCuti('KELUAR')" style="margin-top:10px;">
+              <img src="https://cdn-icons-png.flaticon.com/128/3003/3003035.png" class="icon-3d-std"> PERMOHONAN KELUAR SEMASA BEKERJA
           </button>
           
           <div style="margin-top:20px; border-top:2px solid #e0eafc; padding-top:15px;">
@@ -1493,16 +1578,19 @@
       </div>
 
       <div id="borangCutiPanel" class="cuti-panel-box">
-          <h3 style="color:#1e3c72; margin:0 0 20px 0; font-weight:800;">BORANG PERMOHONAN</h3>
+          <h3 id="tajukBorangCuti" style="color:#1e3c72; margin:0 0 20px 0; font-weight:800;">BORANG PERMOHONAN</h3>
+          <div id="notisKeluarBekerja" style="display:none; font-size:11px; color:#c0392b; background:#fadbd8; padding:12px; border-radius:10px; margin-bottom:15px; border:1px solid #e74c3c; font-weight:600; text-align:justify;">
+            Sila pastikan anda telah mendapatkan kebenaran secara lisan daripada pihak Pentadbir terlebih dahulu sebelum mengisi borang ini. Selepas permohonan anda diluluskan, mohon kerjasama pihak Pentadbir untuk membuat pengesahan di dalam aplikasi ini. Terima kasih.
+          </div>
           <input type="text" id="cutiNama" placeholder="NAMA PENUH" style="text-transform:uppercase">
           <select id="cutiKategori">
               <option value="" disabled selected>-- PEKERJAAN --</option>
-              <option value="GURU">
-GURU</option>
+              <option value="GURU">GURU</option>
               <option value="AKP">AKP</option>
               <option value="KEBERSIHAN">KEBERSIHAN</option>
           </select>
-          <div style="display:flex; gap:15px;">
+          
+          <div id="cutiDateContainer" style="display:flex; gap:15px;">
               <div style="flex:1; text-align:left;">
                   <label style="font-size:11px; color:#55719e; font-weight:700;">Tarikh Mula</label>
                   <input type="date" id="cutiMula">
@@ -1512,7 +1600,19 @@ GURU</option>
                   <input type="date" id="cutiTamat">
               </div>
           </div>
-          <input type="text" id="cutiJenis" placeholder="JENIS CUTI (CRK/Cuti Sakit/Kursus/Mesyuarat)" style="text-transform:uppercase">
+
+          <div id="keluarTimeContainer" style="display:none;">
+              <div style="flex:1; text-align:left;">
+                  <label style="font-size:11px; color:#55719e; font-weight:700;">Tarikh</label>
+                  <input type="text" id="cutiTarikhReadOnly" readonly style="background:#e0eafc;">
+              </div>
+              <div style="flex:1; text-align:left; margin-top:10px;">
+                  <label style="font-size:11px; color:#55719e; font-weight:700;">Tempoh / Masa Keluar</label>
+                  <input type="text" id="cutiMasa" placeholder="Cth: 10:00 AM - 12:00 PM / 2 Jam">
+              </div>
+          </div>
+
+          <input type="text" id="cutiJenis" placeholder="JENIS KEBERADAAN (CRK/Cuti Sakit/Kursus dll)" style="text-transform:uppercase; margin-top:15px;">
           <textarea id="cutiAlasan" style="display:block; min-height:80px; border-color:#3498db; margin-bottom:15px;" placeholder="Alasan / Catatan"></textarea>
           
           <div style="margin-bottom:20px; text-align:left; background:#f4f8fb; padding:15px; border-radius:15px; border:1px dashed #3498db;">
@@ -1527,7 +1627,7 @@ GURU</option>
       </div>
 
       <div id="adminCutiPanel" class="cuti-panel-box">
-          <h3 style="color:#1e3c72; margin:0 0 15px 0; font-weight:800;">PENGURUSAN CUTI (ADMIN)</h3>
+          <h3 style="color:#1e3c72; margin:0 0 15px 0; font-weight:800;">PENGURUSAN KEBERADAAN (ADMIN)</h3>
           <div id="adminCutiList" style="max-height:350px; overflow-y:auto; text-align:left; border:2px solid #e0eafc; padding:10px; border-radius:15px; background:#f8fbff;"></div>
           <button class="btn btn-cancel" onclick="exitAdminCuti()">TUTUP MOD ADMIN</button>
       </div>
@@ -1587,7 +1687,7 @@ GURU</option>
     if (navigator.onLine && 'caches' in window) {
       caches.keys().then(names => {
         for (let name of names) {
-          if (name !== 'ehadir-hybrid-v59-guru') {
+          if (name !== 'ehadir-hybrid-v60-guru') {
             caches.delete(name);
           }
         }
@@ -1723,6 +1823,14 @@ GURU</option>
     } else if(type === 'gps') {
       mIcon.innerText = "📍"; mTitle.style.color = "#c0392b";
       mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="confirmAction()" style="background:linear-gradient(145deg, #f2c94c, #f2994a); color:white; font-size:14px; box-shadow:0 6px #b8732e;">↻ SEMAK GPS SEKARANG</button>`;
+    } else if(type === 'out_of_zone') {
+      mIcon.innerText = "⚠️"; mTitle.style.color = "#e67e22";
+      mBtns.innerHTML = `
+        <button class="modal-btn btn-cancel-modal" onclick="closeCustomModal(); if(window.tempCallback) window.tempCallback('batal')">Batal</button>
+        <button class="modal-btn btn-turquoise" onclick="closeCustomModal(); if(window.tempCallback) window.tempCallback('borang')" style="font-size:11px;">Isi Borang</button>
+        <button class="modal-btn btn-keluar" onclick="closeCustomModal(); if(window.tempCallback) window.tempCallback('habis_kerja')" style="font-size:11px;">Habis Kerja</button>
+      `;
+      mBtns.style.flexWrap = "wrap";
     } else {
       mIcon.innerText = "💡"; mTitle.style.color = "#1e3c72";
       mBtns.innerHTML = `<button class="modal-btn btn-ok" onclick="${btnAction}">Tutup</button>`;
