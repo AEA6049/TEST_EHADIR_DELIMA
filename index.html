@@ -601,7 +601,9 @@
          
          if (isBlocked || isSedangHadir || isSudahKeluar || isTidakHadir) {
            if (statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) {
-             if (isSedangHadir) {
+             if (isSedangHadir && isTidakHadir) {
+               statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO PAUSED (URUSAN LUAR)</span>`;
+             } else if (isSedangHadir) {
                statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-IN DISABLE (SEDANG HADIR)</span>`;
              } else if (isSudahKeluar) {
                statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-IN DISABLE (SUDAH KELUAR HARI INI)</span>`;
@@ -658,27 +660,36 @@
         hasNotifiedEntry = false; 
 
         if (isSedangHadir) {
-          if (!hasNotifiedExit) {
-            hasNotifiedExit = true;
-            sendNotification("ANDA TELAH KELUAR KAWASAN!", "Anda dikesan telah meninggalkan pejabat. Auto Punch-Out akan bermula.", "wake-up-exit");
-          }
-
-          if (!isSubmitting) {
-             if (outZoneStart > 0) {
-               let elapsed = now - outZoneStart;
-               let remainingSec = Math.ceil((MS_OUT_DELAY - elapsed) / 1000);
-               
-               let warnBox = document.getElementById('warningBox');
-               if(warnBox) {
-                 warnBox.style.display = "block";
-                 warnBox.innerHTML = `AMARAN! KELUAR ZON.<br>AUTO PUNCH-OUT DALAM <span style="font-size:1.5em">${remainingSec}</span> S`;
-               }
-
-               if (remainingSec <= 0) {
-                 hantarKeluar(true);
-                 outZoneStart = 0;
-               }
+          if (isTidakHadir) {
+             let wBox = document.getElementById('warningBox');
+             if(wBox) wBox.style.display = "none";
+             outZoneStart = 0;
+             if (statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) {
+                 statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-OUT DIBEKUKAN (URUSAN LUAR)</span>`;
              }
+          } else {
+              if (!hasNotifiedExit) {
+                hasNotifiedExit = true;
+                sendNotification("ANDA TELAH KELUAR KAWASAN!", "Anda dikesan telah meninggalkan pejabat. Auto Punch-Out akan bermula.", "wake-up-exit");
+              }
+
+              if (!isSubmitting) {
+                 if (outZoneStart > 0) {
+                   let elapsed = now - outZoneStart;
+                   let remainingSec = Math.ceil((MS_OUT_DELAY - elapsed) / 1000);
+                   
+                   let warnBox = document.getElementById('warningBox');
+                   if(warnBox) {
+                     warnBox.style.display = "block";
+                     warnBox.innerHTML = `AMARAN! KELUAR ZON.<br>AUTO PUNCH-OUT DALAM <span style="font-size:1.5em">${remainingSec}</span> S`;
+                   }
+
+                   if (remainingSec <= 0) {
+                     hantarKeluar(true);
+                     outZoneStart = 0;
+                   }
+                 }
+              }
           }
         } else {
            let wBox = document.getElementById('warningBox');
@@ -1585,7 +1596,8 @@
           <input type="text" id="cutiNama" placeholder="NAMA PENUH" style="text-transform:uppercase">
           <select id="cutiKategori">
               <option value="" disabled selected>-- PEKERJAAN --</option>
-              <option value="GURU">GURU</option>
+              <option value="GURU">
+GURU</option>
               <option value="AKP">AKP</option>
               <option value="KEBERSIHAN">KEBERSIHAN</option>
           </select>
@@ -2676,11 +2688,28 @@
           }
 
           let detailsHTML = "";
+          let displayJawatan = i.jawatan ? ` <span style="font-size:10px; color:#7f8c8d; font-weight:600;">(${i.jawatan})</span>` : "";
+
           if (i.kategori === "CUTI") {
               let isSah = i.statusSah === "DISAHKAN";
               let pengesahText = isSah ? `<div style="color:#ffffff; font-size:10px; font-weight:800; margin-top:5px; background:linear-gradient(145deg, #27ae60, #2ecc71); display:inline-block; padding:4px 8px; border-radius:6px; box-shadow:0 2px 4px rgba(39,174,96,0.2);">DISAHKAN OLEH: ${i.admin || "ADMIN"}</div>` : `<div style="color:#1e3c72; font-size:10px; font-weight:800; margin-top:5px; background:linear-gradient(145deg, #f2c94c, #f2994a); display:inline-block; padding:4px 8px; border-radius:6px; box-shadow:0 2px 4px rgba(242,153,74,0.2);">BELUM DISAHKAN</div>`;
 
-              detailsHTML = `<div style="display:flex; align-items:center; gap:5px;"><span style="font-weight:800; color:#3498db;">STATUS KEBERADAAN: ${i.jam}</span></div>${pengesahText}`;
+              let tempohText = "";
+              let sebabText = "";
+              if (i.alasan) {
+                  let masaMatch = i.alasan.match(/\[Masa:\s*(.*?)\]/);
+                  if (masaMatch) {
+                      tempohText = `<div style="font-size:11px; color:#d35400; margin-top:3px; font-weight:700;">Tempoh Keluar: ${masaMatch[1]}</div>`;
+                      sebabText = i.alasan.replace(masaMatch[0], '').trim();
+                  } else {
+                      sebabText = i.alasan;
+                  }
+              }
+
+              detailsHTML = `<div style="display:flex; align-items:center; gap:5px;"><span style="font-weight:800; color:#3498db;">STATUS KEBERADAAN: ${i.jam}</span></div>`;
+              if (tempohText) detailsHTML += tempohText;
+              if (sebabText) detailsHTML += `<div style="font-size:11px; color:#55719e; margin-top:3px; font-style:italic;">Sebab: ${sebabText}</div>`;
+              detailsHTML += pengesahText;
           } else {
               let locIndicator = "";
               if (i.keluar && i.keluar !== "" && i.keluar !== "undefined") {
@@ -2698,7 +2727,7 @@
               <div style="display:flex; align-items:center; width:100%;">
                 ${i.kategori !== "CUTI" ? avatarOrPhoto : ""}
                 <div class="user-info">
-                  <strong style="color:${nameColor}">${offlineIcon}${i.nama}</strong>
+                  <strong style="color:${nameColor}">${offlineIcon}${i.nama}${i.kategori === 'CUTI' ? displayJawatan : ''}</strong>
                   <div class="user-details">${detailsHTML}</div>
                 </div>
               </div>
