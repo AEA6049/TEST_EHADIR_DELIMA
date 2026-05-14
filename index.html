@@ -2680,7 +2680,7 @@
               let isSah = i.statusSah === "DISAHKAN";
               let pengesahText = isSah ? `<div style="color:#ffffff; font-size:10px; font-weight:800; margin-top:5px; background:linear-gradient(145deg, #27ae60, #2ecc71); display:inline-block; padding:4px 8px; border-radius:6px; box-shadow:0 2px 4px rgba(39,174,96,0.2);">DISAHKAN OLEH: ${i.admin || "ADMIN"}</div>` : `<div style="color:#1e3c72; font-size:10px; font-weight:800; margin-top:5px; background:linear-gradient(145deg, #f2c94c, #f2994a); display:inline-block; padding:4px 8px; border-radius:6px; box-shadow:0 2px 4px rgba(242,153,74,0.2);">BELUM DISAHKAN</div>`;
 
-              detailsHTML = `<div style="display:flex; align-items:center; gap:5px;"><span style="font-weight:800; color:#3498db;">TIDAK HADIR KERANA: ${i.jam}</span></div>${pengesahText}`;
+              detailsHTML = `<div style="display:flex; align-items:center; gap:5px;"><span style="font-weight:800; color:#3498db;">STATUS KEBERADAAN: ${i.jam}</span></div>${pengesahText}`;
           } else {
               let locIndicator = "";
               if (i.keluar && i.keluar !== "" && i.keluar !== "undefined") {
