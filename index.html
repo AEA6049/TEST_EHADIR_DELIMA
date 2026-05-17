@@ -16,11 +16,11 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwNQyHs3lOsPvCogVnjRkiXF4wh7P8s2iF7zkzlE_k6cBMLGMvdDBQ88eixCKVp9m2ULg/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyuYAu_61JGA8mWwLV5B97nWM_PiKJYdytVwECVyGDmsljUPxw_NHp2tk-ZKQ1GnVng0w/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
-    const RADIUS_METER = 2000000; 
+    const RADIUS_METER = 200; 
     
     // KONFIGURASI GOOGLE LOGIN (GURU)
     const GOOGLE_CLIENT_ID = "195095139195-vknkcc0h9b8pp75n4ej2c7jpdc5r62br.apps.googleusercontent.com";
@@ -1293,7 +1293,7 @@
           <img src="https://cdn-icons-png.flaticon.com/128/3580/3580154.png" class="icon-3d-std"> DAFTAR KELUAR 
         </button>
         
-        <div style="margin-top: 20px; border-top: 2px solid #e0eafc; padding-top: 20px; display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div style="margin-top: 20px; border-top: 2px solid #e0eafc; padding-top: 20px; display:flex; flex-direction:column; gap:12px;">
           <button id="btnCutiDash" class="btn btn-turquoise" onclick="openCutiWorkflow()" style="margin-top:0; margin-bottom:0; font-size:12px;">
             <img src="https://cdn-icons-png.flaticon.com/128/883/883356.png" class="icon-3d-std"> URUS KEBERADAAN
           </button>
@@ -1346,7 +1346,7 @@
           <img src="https://cdn-icons-png.flaticon.com/128/3580/3580154.png" class="icon-3d-std"> DAFTAR KELUAR
         </button>
 
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:15px;">
+        <div style="display:flex; flex-direction:column; gap:12px; margin-top:15px;">
           <button id="btnCutiMain" class="btn btn-turquoise" onclick="openCutiWorkflow()" style="margin-top:0; margin-bottom:0;">
             <img src="https://cdn-icons-png.flaticon.com/128/883/883356.png" class="icon-3d-std"> KEBERADAAN
           </button>
