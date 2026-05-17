@@ -16,7 +16,7 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxd9OgTCRoksEJlcLhxoWMgMpRLIvme2zlDWUzfFGbEvUUAvYSU49HgNY5wVcXTWKv4_A/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyuYAu_61JGA8mWwLV5B97nWM_PiKJYdytVwECVyGDmsljUPxw_NHp2tk-ZKQ1GnVng0w/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
@@ -1276,7 +1276,7 @@
 
       <div id="dashboardPanel">
         <span class="user-welcome">
-          <img id="userAvatarDash" src="https://cdn-icons-png.flaticon.com/128/4140/4140047.png" class="icon-3d-lg">
+          <img id="userAvatarDash" src="https://cdn-icons-png.flaticon.com/128/4140/4140047.png" class="icon-3d-lg" onerror="this.src='https://cdn-icons-png.flaticon.com/128/4140/4140047.png'">
           Hai, <span id="sessionName">--</span>
         </span>
         <div class="locked-msg">Sesi telah didaftarkan.</div>
@@ -2429,7 +2429,7 @@ GURU</option>
           let displayImg = i.avatar || "https://cdn-icons-png.flaticon.com/128/4140/4140047.png";
           if (i.foto && i.foto.length > 10) displayImg = i.foto; 
           
-          let avatarOrPhoto = `<img src="${displayImg}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid ${catColors[i.kategori] || '#ccc'}; margin-right:8px;">`;
+          let avatarOrPhoto = `<img src="${displayImg}" onerror="console.error('Ralat muat gambar (CORS/URL):', this.src); this.src='https://cdn-icons-png.flaticon.com/128/4140/4140047.png';" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid ${catColors[i.kategori] || '#ccc'}; margin-right:8px;">`;
 
           let imgBtn = (i.kategori === "PELAWAT" && i.foto) ? `<span class="icon-btn" onclick="viewImage(${idx})"><img src="https://cdn-icons-png.flaticon.com/128/3342/3342137.png" class="icon-3d-mini" style="margin:0;"></span>` : "";
           let xBtn = (isHistory || i.kategori === "CUTI" || i.keluar) ? "" : `<span class="icon-btn" style="border-color:#fadbd8; background:linear-gradient(145deg, #ffe0e0, #ffb3b3);" onclick="keluarManual('${i.nama}')"><img src="https://cdn-icons-png.flaticon.com/128/6861/6861362.png" class="icon-3d-mini" style="margin:0;"></span>`;
@@ -2539,7 +2539,13 @@ GURU</option>
   function viewImage(index) { 
     let data = currentList[index]; 
     if (data && data.foto) { 
-      document.getElementById('imgFull').src = data.foto; 
+      let imgEl = document.getElementById('imgFull');
+      imgEl.onerror = function() {
+        console.error('Ralat paparan gambar modal:', data.foto);
+        alert('Gagal memaparkan gambar dari server. Ia mungkin disekat atau tiada akses awam.');
+        this.src = 'https://cdn-icons-png.flaticon.com/128/4140/4140047.png';
+      };
+      imgEl.src = data.foto; 
       document.getElementById('imageModal').style.display = "flex"; 
     } 
   }
