@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Sistem Pelawat & Kehadiran v39.5 (Integrasi KPM Google Log Aktif & Fix)</title>
+  <title>Sistem Pelawat & Kehadiran (Manual Mode)</title>
   
   <!-- GOOGLE IDENTITY SERVICES UNTUK LOGIN GMAIL -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -21,9 +21,6 @@
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
     const RADIUS_METER = 200; 
-    const MINIT_ANTI_SPAM_MASUK = 1;
-    const MINIT_DELAY_KELUAR = 1;
-    const RADIUS_RESET_AUTO_IN = 200;
     
     // KONFIGURASI GOOGLE LOGIN (GURU)
     const GOOGLE_CLIENT_ID = "195095139195-vknkcc0h9b8pp75n4ej2c7jpdc5r62br.apps.googleusercontent.com";
@@ -44,12 +41,7 @@
     let lastLat = 0, lastLng = 0;
     let currentList = []; 
     let isSubmitting = false; 
-    let hasNotifiedWake = false; 
-    let inZoneStart = 0; 
-    let outZoneStart = 0; 
     let wakeLock = null;
-    let hasNotifiedEntry = false;
-    let hasNotifiedExit = false;
     let gpsWatchId = null;
     let isCutiModeActive = false;
 
@@ -128,7 +120,6 @@
         let queue = JSON.parse(localStorage.getItem('ehadir_offline_queue') || "[]");
         let isPending = queue.some(q => safeName(q.nama) === checkName && q.action === "MASUK");
         
-        // MEMASTIKAN SESSION TIDAK TERPADAM SECARA TIDAK SENGAJA
         if (currentSess && !isPending && isKeluarRecord) {
           localStorage.removeItem('ehadir_session');
           document.getElementById('dashboardPanel').style.display = 'none';
@@ -160,33 +151,17 @@
           formWarn.innerHTML = "⚠️ ANDA BELUM DAFTAR KELUAR";
           formWarn.style.display = 'block';
         }
-        localStorage.setItem('ehadir_auto_in_blocked', 'true');
       } else {
         if(btnMasuk) btnMasuk.style.display = 'flex';
         if(formWarn) formWarn.style.display = 'none';
       }
     }
 
-    async function hantarMasuk(isAuto = false) {
+    async function hantarMasuk() {
       if(isSubmitting) return; 
 
-      if (isAuto) {
-          let lastAuto = localStorage.getItem('ehadir_last_autoin_time');
-          if (lastAuto && (Date.now() - parseInt(lastAuto)) < 60000) {
-              console.log("Auto-In disekat oleh Cooldown 60s.");
-              return; 
-          }
-          localStorage.setItem('ehadir_last_autoin_time', Date.now().toString());
-      }
-
-      let nama, kat;
-      if (isAuto) {
-        nama = localStorage.getItem('ehadir_locked_name');
-        kat = localStorage.getItem('ehadir_locked_kat');
-      } else {
-        nama = document.getElementById('nama').value.toUpperCase().trim();
-        kat = document.getElementById('kategori').value;
-      }
+      let nama = document.getElementById('nama').value.toUpperCase().trim();
+      let kat = document.getElementById('kategori').value;
       
       let userEmail = "";
       if (kat === 'GURU') {
@@ -203,62 +178,56 @@
       let safeName = (n) => n ? String(n).toUpperCase().trim() : "";
       let isAlreadyActive = currentList.some(i => safeName(i.nama) === nama && !i.isOffline && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
       if (isAlreadyActive) {
-        if (!isAuto) showModernAlert("Sesi Aktif", "Anda belum daftar keluar untuk sesi sebelum ini. Sila klik DAFTAR KELUAR.", "error");
+        showModernAlert("Sesi Aktif", "Anda belum daftar keluar untuk sesi sebelum ini. Sila klik DAFTAR KELUAR.", "error");
         return;
       }
 
-      if(!isAuto) {
-        localStorage.removeItem('ehadir_session');
-        localStorage.removeItem('ehadir_auto_in_blocked');
-      }
+      localStorage.removeItem('ehadir_session');
 
       if(!isInZone) { 
-        if(isAuto) return; 
         showModernAlert("Luar Kawasan", "Anda berada di luar zon yang dibenarkan (" + Math.round(currentDist) + "m).", "error");
         return;
       }
 
-      let alasan = "AUTO CHECK-IN (GPS)";
+      let alasan = "-";
       let now = new Date();
 
       if (!nama || !kat) { 
-        if(!isAuto) showModernAlert("Data Tidak Lengkap", "Isi Nama dan Kategori.", "error"); 
+        showModernAlert("Data Tidak Lengkap", "Isi Nama dan Kategori.", "error"); 
         return; 
       }
 
       isSubmitting = true;
-      if(!isAuto) { 
-        document.getElementById('btnMainSubmit').disabled = true; 
-        document.getElementById('btnMainSubmit').innerHTML = 'MENYEMAK GPS...'; 
+      document.getElementById('btnMainSubmit').disabled = true; 
+      document.getElementById('btnMainSubmit').innerHTML = 'MENYEMAK GPS...'; 
 
-        try {
-          await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(pos => {
-              let d = calcDist(pos.coords.latitude, pos.coords.longitude, SCHOOL_LAT, SCHOOL_LNG);
-              if (d > RADIUS_METER) {
-                reject(`Lokasi tidak sah! Jarak: ${Math.round(d)}m`);
-              } else {
-                lastLat = pos.coords.latitude; 
-                lastLng = pos.coords.longitude; 
-                resolve();
-              }
-            }, err => {
-              if (isInZone && lastLat !== 0) {
-                resolve();
-              } else {
-                reject("Pencarian GPS gagal. " + err.message);
-              }
-            }, {enableHighAccuracy: true, maximumAge: 0, timeout: 5000});
-          });
-        } catch(e) {
-          showModernAlert("Gagal Masuk", e, "error");
-          isSubmitting = false;
-          document.getElementById('btnMainSubmit').disabled = false;
-          document.getElementById('btnMainSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK`;
-          return;
-        }
-        document.getElementById('btnMainSubmit').innerHTML = 'SEDANG HANTAR...'; 
+      try {
+        await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(pos => {
+            let d = calcDist(pos.coords.latitude, pos.coords.longitude, SCHOOL_LAT, SCHOOL_LNG);
+            if (d > RADIUS_METER) {
+              reject(`Lokasi tidak sah! Jarak: ${Math.round(d)}m`);
+            } else {
+              lastLat = pos.coords.latitude; 
+              lastLng = pos.coords.longitude; 
+              resolve();
+            }
+          }, err => {
+            if (isInZone && lastLat !== 0) {
+              resolve();
+            } else {
+              reject("Pencarian GPS gagal. " + err.message);
+            }
+          }, {enableHighAccuracy: true, maximumAge: 0, timeout: 5000});
+        });
+      } catch(e) {
+        showModernAlert("Gagal Masuk", e, "error");
+        isSubmitting = false;
+        document.getElementById('btnMainSubmit').disabled = false;
+        document.getElementById('btnMainSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK`;
+        return;
       }
+      document.getElementById('btnMainSubmit').innerHTML = 'SEDANG HANTAR...'; 
 
       try {
         let savedAvatar = localStorage.getItem('ehadir_user_avatar') || "";
@@ -269,25 +238,19 @@
 
         if (result.offline) {
           let errMsg = result.errorMsg ? ("<br><br>Info: " + result.errorMsg) : "";
-          if(!isAuto) showModernAlert("Mod Offline", "Data disimpan dalam telefon." + errMsg, "info");
+          showModernAlert("Mod Offline", "Data disimpan dalam telefon." + errMsg, "info");
           localStorage.setItem('ehadir_session', JSON.stringify({nama: nama, kategori: kat, date: getTodayStr(), uuid: uniqueID, avatar: savedAvatar}));
-          localStorage.removeItem('ehadir_auto_in_blocked');
           location.reload();
         } else {
           if (result.data && result.data.result === "success") {
-            if(isAuto) {
-              showSyncBar("MENGESAHKAN DATA DI PANGKALAN DATA...", "#f39c12");
-              await verifyAndFinalize(nama, kat, uniqueID, savedAvatar, 1, true);
-            } else {
-               document.getElementById('btnMainSubmit').innerHTML = 'SAHKAN DATA (DB)...';
-               await verifyAndFinalize(nama, kat, uniqueID, savedAvatar);
-            }
+             document.getElementById('btnMainSubmit').innerHTML = 'SAHKAN DATA (DB)...';
+             await verifyAndFinalize(nama, kat, uniqueID, savedAvatar);
           } else {
              let msg = (result.data && result.data.msg) ? result.data.msg : "Data gagal masuk ke Google Sheet. Sila cuba lagi.";
              let cb = null;
              if(msg.includes("Log Keluar") || msg.includes("Log keluar")) cb = function() { logoutGuru(true); };
              
-             if(!isAuto) showModernAlert("Gagal", msg, "error", cb);
+             showModernAlert("Gagal", msg, "error", cb);
              isSubmitting = false;
              document.getElementById('btnMainSubmit').disabled = false;
              document.getElementById('btnMainSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK`;
@@ -296,24 +259,17 @@
       } catch (error) {
         console.error("Ralat:", error);
         isSubmitting = false;
-        if(!isAuto) {
-            document.getElementById('btnMainSubmit').disabled = false;
-            showModernAlert("Ralat Rangkaian", "Sistem gagal menghubungi server: " + error.message, "error");
-        }
+        document.getElementById('btnMainSubmit').disabled = false;
+        showModernAlert("Ralat Rangkaian", "Sistem gagal menghubungi server: " + error.message, "error");
       }
     }
 
-    async function verifyAndFinalize(nama, kat, uuid, avatar, attempt = 1, isAuto = false) {
+    async function verifyAndFinalize(nama, kat, uuid, avatar, attempt = 1) {
        if(attempt > 5) {
-         if(isAuto) {
-           showSyncBar("GAGAL SAHKAN DATA. AKAN CUBA SEMULA.", "#c0392b");
-           isSubmitting = false;
-         } else {
-           showModernAlert("Masa Tamat", "Data dihantar tetapi server lambat respon. Sila semak senarai manual.", "info");
-           isSubmitting = false;
-           document.getElementById('btnMainSubmit').disabled = false;
-           document.getElementById('btnMainSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK`;
-         }
+         showModernAlert("Masa Tamat", "Data dihantar tetapi server lambat respon. Sila semak senarai manual.", "info");
+         isSubmitting = false;
+         document.getElementById('btnMainSubmit').disabled = false;
+         document.getElementById('btnMainSubmit').innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK`;
          return;
        }
        
@@ -326,35 +282,27 @@
          let record = list.find(item => item.nama === nama && item.jam && item.jam !== "");
          
          if (record) {
-           if(isAuto) {
-             showSyncBar("BERJAYA: DATA DISAHKAN DALAM SISTEM", "#27ae60");
-             sendNotification("DAFTAR MASUK SAH", "Kehadiran anda telah direkodkan dalam pangkalan data.", "auto-success");
-           } else {
-             showModernAlert("Berjaya", "Data disahkan masuk dalam sistem!", "success");
-           }
+           showModernAlert("Berjaya", "Data disahkan masuk dalam sistem!", "success");
            localStorage.setItem('ehadir_session', JSON.stringify({nama: nama, kategori: kat, date: getTodayStr(), uuid: uuid, avatar: avatar}));
-           localStorage.removeItem('ehadir_auto_in_blocked');
            setTimeout(() => location.reload(), 1500);
          } else {
-           if(!isAuto) document.getElementById('btnMainSubmit').innerHTML = `SAHKAN DATA (${attempt}/5)...`;
-           else showSyncBar(`MENYEMAK PANGKALAN DATA (${attempt}/5)...`, "#e67e22");
-           
-           await verifyAndFinalize(nama, kat, uuid, avatar, attempt + 1, isAuto);
+           document.getElementById('btnMainSubmit').innerHTML = `SAHKAN DATA (${attempt}/5)...`;
+           await verifyAndFinalize(nama, kat, uuid, avatar, attempt + 1);
          }
        } catch(e) {
          console.log("Verify Error", e);
-         await verifyAndFinalize(nama, kat, uuid, avatar, attempt + 1, isAuto);
+         await verifyAndFinalize(nama, kat, uuid, avatar, attempt + 1);
        }
     }
 
-    async function hantarKeluar(isAuto = false) {
+    async function hantarKeluar() {
       if(isSubmitting) return; 
 
       let session = JSON.parse(localStorage.getItem('ehadir_session'));
       let namaVal, katVal, uuidVal;
       let userEmail = localStorage.getItem('ehadir_guru_email') || "";
 
-      if (!isAuto && !session) {
+      if (!session) {
         let iName = document.getElementById('nama') ? document.getElementById('nama').value.toUpperCase().trim() : "";
         if(!iName) iName = localStorage.getItem('ehadir_locked_name') || "";
 
@@ -399,25 +347,20 @@
             namaVal = lName; 
             katVal = lKat; 
         } else {
-          if(!isAuto) showModernAlert("Tiada Maklumat", "Sila isi Nama & Kategori atau KUNCI nama dahulu untuk daftar keluar.", "error");
+          showModernAlert("Tiada Maklumat", "Sila isi Nama & Kategori atau KUNCI nama dahulu untuk daftar keluar.", "error");
           return;
         }
         uuidVal = "MANUAL_OUT_" + Date.now();
       }
       
-      if (!isAuto && katVal === 'GURU' && !userEmail) {
+      if (katVal === 'GURU' && !userEmail) {
          showModernAlert("Sesi Tamat / Tiada Akses", "Anda mesti log masuk Gmail terlebih dahulu untuk mendaftar keluar sebagai GURU.", "error");
          document.getElementById('guruAuthModal').style.display = 'flex';
          renderGoogleBtn();
          return;
       }
 
-      if (isAuto && currentList.length > 0) {
-         let activeRec = currentList.find(i => i.nama === namaVal && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
-         if (activeRec && activeRec.uuid) uuidVal = activeRec.uuid;
-      }
-      
-      let alasanValue = isAuto ? "AUTO CHECKOUT (KELUAR KAWASAN)" : "PULANG (MANUAL)";
+      let alasanValue = "PULANG (MANUAL)";
       let sessionUUID = uuidVal;
 
       let proceedCheckoutAPI = async (finalAlasan) => {
@@ -430,17 +373,12 @@
           
           let result = await sendData(payload);
           
-          if(isAuto) {
-            showSyncBar("SEMOGA SELAMAT DALAM PERJALANAN ANDA", "#c0392b");
+          if(result.data && result.data.msg) {
+             showModernAlert("Selesai", result.data.msg, "success");
           } else {
-             if(result.data && result.data.msg) {
-                 showModernAlert("Selesai", result.data.msg, "success");
-             } else {
-                 showModernAlert("Selesai", "Daftar Keluar Berjaya.", "success");
-             }
+             showModernAlert("Selesai", "Daftar Keluar Berjaya.", "success");
           }
           
-          localStorage.setItem('ehadir_auto_in_blocked', 'true');
           localStorage.removeItem('ehadir_session');
           
           setTimeout(() => location.reload(), 1500);
@@ -456,32 +394,28 @@
         isSubmitting = true; 
         let locStatus = "TIADA";
 
-        if(!isAuto) { 
-          let btn = document.getElementById('btnKeluar') || document.getElementById('btnKeluarMain');
-          if(btn) { btn.disabled = true; btn.innerText = "MENCARI GPS (3s)..."; }
-          
-          try {
-            await new Promise((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(pos => {
-                let d = calcDist(pos.coords.latitude, pos.coords.longitude, SCHOOL_LAT, SCHOOL_LNG);
-                locStatus = (d <= RADIUS_METER) ? "DALAM" : "LUAR";
-                lastLat = pos.coords.latitude;
-                lastLng = pos.coords.longitude;
-                resolve();
-              }, err => {
-                reject();
-              }, { enableHighAccuracy: true, timeout: 3000, maximumAge: 0 });
-            });
-          } catch(e) {
-            locStatus = "TIADA";
-          }
-        } else {
-          locStatus = "LUAR";
+        let btn = document.getElementById('btnKeluar') || document.getElementById('btnKeluarMain');
+        if(btn) { btn.disabled = true; btn.innerText = "MENCARI GPS (3s)..."; }
+        
+        try {
+          await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(pos => {
+              let d = calcDist(pos.coords.latitude, pos.coords.longitude, SCHOOL_LAT, SCHOOL_LNG);
+              locStatus = (d <= RADIUS_METER) ? "DALAM" : "LUAR";
+              lastLat = pos.coords.latitude;
+              lastLng = pos.coords.longitude;
+              resolve();
+            }, err => {
+              reject();
+            }, { enableHighAccuracy: true, timeout: 3000, maximumAge: 0 });
+          });
+        } catch(e) {
+          locStatus = "TIADA";
         }
 
         window.tempLocStatus = locStatus;
 
-        if (!isAuto && locStatus === "LUAR") {
+        if (locStatus === "LUAR") {
             isSubmitting = false;
             let btn = document.getElementById('btnKeluar') || document.getElementById('btnKeluarMain');
             if(btn) { btn.disabled = false; btn.innerHTML = `<img src="https://cdn-icons-png.flaticon.com/128/3580/3580154.png" class="icon-3d-std"> DAFTAR KELUAR`; }
@@ -506,11 +440,7 @@
         }
       };
 
-      if(!isAuto) {
-        showModernAlert("Pengesahan", "Daftar keluar sekarang?", "confirm", function() { proceed(); });
-      } else {
-        proceed();
-      }
+      showModernAlert("Pengesahan", "Daftar keluar sekarang?", "confirm", function() { proceed(); });
     }
 
     function keluarManual(namaUser) {
@@ -554,42 +484,7 @@
 
     function monitorAutoLogic() {
       if (isCutiModeActive) return;
-
-      let MS_IN_DELAY = (typeof MINIT_ANTI_SPAM_MASUK !== 'undefined' ? MINIT_ANTI_SPAM_MASUK : 1) * 60 * 1000;
-      let MS_OUT_DELAY = (typeof MINIT_DELAY_KELUAR !== 'undefined' ? MINIT_DELAY_KELUAR : 1) * 60 * 1000;
-
-      let session = JSON.parse(localStorage.getItem('ehadir_session'));
-      let locked = localStorage.getItem('ehadir_locked_name');
-      let lockedKat = localStorage.getItem('ehadir_locked_kat');
-      let now = Date.now();
-
       let statusEl = document.getElementById('statusText');
-      let isBlocked = localStorage.getItem('ehadir_auto_in_blocked'); 
-
-      let checkName = locked || (session ? session.nama : null);
-      if (checkName) checkName = checkName.toUpperCase().trim();
-      
-      let safeName = (n) => n ? String(n).toUpperCase().trim() : "";
-      let isSedangHadir = false;
-      let isSudahKeluar = false;
-      let isTidakHadir = false;
-      
-      if (checkName) {
-        isSedangHadir = currentList.some(i => safeName(i.nama) === checkName && i.kategori !== "CUTI" && (!i.keluar || i.keluar === ""));
-        isSudahKeluar = currentList.some(i => safeName(i.nama) === checkName && i.kategori !== "CUTI" && i.keluar && i.keluar !== "");
-        isTidakHadir = currentList.some(i => safeName(i.nama) === checkName && i.kategori === "CUTI");
-
-        // MEMASTIKAN AUTO-IN TERSEKAT JIKA SESSION MASIH ADA BAGI NAMA TERSEBUT
-        if (session && session.nama && safeName(session.nama) === checkName) {
-            isSedangHadir = true;
-        }
-      }
-
-      // LOGIK KAWALAN PENGHALANG
-      if (isSedangHadir) {
-          localStorage.setItem('ehadir_auto_in_blocked', 'true');
-          isBlocked = true;
-      }
 
       if (isInZone) {
          let icon = "<img src='https://cdn-icons-png.flaticon.com/128/190/190411.png' class='icon-3d-mini'>";
@@ -598,24 +493,6 @@
            statusEl.style.color = "#1e3c72";
            statusEl.style.background = "#e0eafc";
          }
-         
-         if (isBlocked || isSedangHadir || isSudahKeluar || isTidakHadir) {
-           if (statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) {
-             if (isSedangHadir && isTidakHadir) {
-               statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO PAUSED (URUSAN LUAR)</span>`;
-             } else if (isSedangHadir) {
-               statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-IN DISABLE (SEDANG HADIR)</span>`;
-             } else if (isSudahKeluar) {
-               statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-IN DISABLE (SUDAH KELUAR HARI INI)</span>`;
-             } else if (isTidakHadir) {
-               statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-IN DISABLE (TIDAK HADIR/CUTI)</span>`;
-             } else {
-               statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-IN DISABLE (KELUAR > ${RADIUS_RESET_AUTO_IN}M UNTUK RESET)</span>`;
-             }
-           }
-           inZoneStart = 0; // HENTIKAN TIMER AUTO-IN
-           return; 
-         }
       } else {
          let icon = "<img src='https://cdn-icons-png.flaticon.com/128/190/190406.png' class='icon-3d-mini'>";
          if(statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) {
@@ -623,79 +500,6 @@
            statusEl.style.color = "#c0392b";
            statusEl.style.background = "#fadbd8";
          }
-      }
-
-      if (isInZone) {
-        let wBox = document.getElementById('warningBox');
-        if(wBox) wBox.style.display = "none";
-        hasNotifiedExit = false; 
-        
-        if (!session && locked && lockedKat && !hasNotifiedEntry && !isSedangHadir && !isSudahKeluar && !isTidakHadir) {
-          hasNotifiedEntry = true;
-          sendNotification("ANDA SUDAH SAMPAI!", "Sila klik di sini untuk buka aplikasi", "wake-up-entry");
-        }
-
-        if (!session && locked && lockedKat && !isSubmitting && !isSedangHadir && !isSudahKeluar && !isTidakHadir) {
-          if (lockedKat === 'GURU' && !localStorage.getItem('ehadir_guru_email')) {
-              if (statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) statusEl.innerHTML += ` <br>[AUTO-IN GAGAL: SILA LOGIN GMAIL]`;
-              return;
-          }
-          
-          if (inZoneStart > 0) {
-            let elapsed = now - inZoneStart;
-            let remainingSec = Math.ceil((MS_IN_DELAY - elapsed) / 1000);
-            
-            if(statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) statusEl.innerHTML += ` <br>[AUTO-PUNCH IN: ${remainingSec}s]`;
-            
-            if (remainingSec <= 0) {
-              hantarMasuk(true);
-              inZoneStart = 0; 
-            }
-          }
-        } else {
-          inZoneStart = 0;
-        }
-      } 
-      else {
-        hasNotifiedEntry = false; 
-
-        if (isSedangHadir) {
-          if (isTidakHadir) {
-             let wBox = document.getElementById('warningBox');
-             if(wBox) wBox.style.display = "none";
-             outZoneStart = 0;
-             if (statusEl && !statusEl.innerHTML.includes('SEMAK & AKTIFKAN')) {
-                 statusEl.innerHTML += `<br><span style="font-size:9px; color:#e67e22;">AUTO-OUT DIBEKUKAN (URUSAN LUAR)</span>`;
-             }
-          } else {
-              if (!hasNotifiedExit) {
-                hasNotifiedExit = true;
-                sendNotification("ANDA TELAH KELUAR KAWASAN!", "Anda dikesan telah meninggalkan pejabat. Auto Punch-Out akan bermula.", "wake-up-exit");
-              }
-
-              if (!isSubmitting) {
-                 if (outZoneStart > 0) {
-                   let elapsed = now - outZoneStart;
-                   let remainingSec = Math.ceil((MS_OUT_DELAY - elapsed) / 1000);
-                   
-                   let warnBox = document.getElementById('warningBox');
-                   if(warnBox) {
-                     warnBox.style.display = "block";
-                     warnBox.innerHTML = `AMARAN! KELUAR ZON.<br>AUTO PUNCH-OUT DALAM <span style="font-size:1.5em">${remainingSec}</span> S`;
-                   }
-
-                   if (remainingSec <= 0) {
-                     hantarKeluar(true);
-                     outZoneStart = 0;
-                   }
-                 }
-              }
-          }
-        } else {
-           let wBox = document.getElementById('warningBox');
-           if(wBox) wBox.style.display = "none";
-           outZoneStart = 0;
-        }
       }
     }
 
@@ -751,16 +555,6 @@
           lastLat = pos.coords.latitude; lastLng = pos.coords.longitude;
           currentDist = calcDist(lastLat, lastLng, SCHOOL_LAT, SCHOOL_LNG);
           isInZone = (currentDist <= RADIUS_METER);
-          if (currentDist > RADIUS_RESET_AUTO_IN) {
-            localStorage.removeItem('ehadir_auto_in_blocked');
-          }
-          if (isInZone) {
-            if (!inZoneStart) inZoneStart = Date.now();
-            outZoneStart = 0; 
-          } else {
-            if (!outZoneStart) outZoneStart = Date.now();
-            inZoneStart = 0; 
-          }
         }, err => {
           handleGPSError(err);
         }, {enableHighAccuracy: true, maximumAge: 0, timeout: 5000});
@@ -1306,9 +1100,6 @@
     .close-modal { position: absolute; top: 20px; right: 35px; color: #ffffff; font-size: 40px; font-weight: bold; cursor: pointer; text-shadow: 0 2px 5px rgba(0,0,0,0.5); transition: 0.2s; }
     .close-modal:hover { color: #3498db; transform: scale(1.1); }
 
-    #warningBox { display: none; position: fixed; bottom: 0; left: 0; width: 100%; background: linear-gradient(to right, #ff416c, #ff4b2b); color: white; padding: 15px; text-align: center; z-index: 9999; font-weight: 800; box-shadow: 0 -10px 25px rgba(255,65,108,0.4); animation: pulseWarn 1s infinite; border-top: 2px solid rgba(255,255,255,0.3); }
-    @keyframes pulseWarn { 0% { filter: brightness(1); } 50% { filter: brightness(1.2); } 100% { filter: brightness(1); } }
-    
     #loadingConfig { font-size: 11px; color: #3498db; display: none; margin-bottom: 5px; font-weight: 600; }
     #statusText { font-size: 11px; font-weight: 700; margin-bottom: 15px; color: #1e3c72; background: #e0eafc; padding: 6px 15px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05), 0 2px 5px rgba(255,255,255,1); border: 1px solid #c5d4e8; }
 
@@ -1346,7 +1137,6 @@
 <body oncontextmenu="return false;"> 
 
   <div id="syncStatusBar"></div>
-  <div id="warningBox"> AMARAN! KELUAR ZON.<br>AUTO-CHECKOUT DALAM <span id="countDown">10</span>S</div>
 
   <!-- Modal Standard -->
   <div id="customModal">
@@ -1473,7 +1263,7 @@
     </div>
 
     <div class="content-padding">
-      <div id="autoModeIndicator">Cara Guna: PILIH JAWATAN, NAMA PENUH, PILIH ICON AVATAR, LOCK, DAFTAR MASUK / JIKA ADA MASALAH SILA PADAM HISTORY BROWSER ANDA / SILA GUNA BROWSER GOOGLE CHROME DAN ADD TO HOME SCREEN UNTUK LEBIH STABIL</div>
+      <div id="autoModeIndicator">Cara Guna: PILIH JAWATAN, NAMA PENUH, PILIH ICON AVATAR, LOCK, KEMUDIAN DAFTAR MASUK / KELUAR SECARA MANUAL.</div>
       
       <div id="statusText">
         <img src="https://cdn-icons-png.flaticon.com/128/9357/9357448.png" class="icon-3d-mini spin-3d"> 
@@ -1499,7 +1289,7 @@
         
         <textarea id="alasanKeluar" style="display:none;" placeholder="Mohon nyatakan sebab pulang awal untuk makluman pentadbir..."></textarea>
         
-        <button id="btnKeluar" class="btn btn-keluar" onclick="hantarKeluar(false)">
+        <button id="btnKeluar" class="btn btn-keluar" onclick="hantarKeluar()">
           <img src="https://cdn-icons-png.flaticon.com/128/3580/3580154.png" class="icon-3d-std"> DAFTAR KELUAR 
         </button>
         
@@ -1548,11 +1338,11 @@
 
         <div id="formWarningMsg" style="display:none; color:#c0392b; font-size:12px; font-weight:800; margin-bottom:15px; background:#fadbd8; padding:12px; border-radius:12px; text-align:center; border: 2px solid #e74c3c; box-shadow: 0 4px 10px rgba(231,76,60,0.2);"></div>
 
-        <button id="btnMainSubmit" class="btn" onclick="hantarMasuk(false)">
+        <button id="btnMainSubmit" class="btn" onclick="hantarMasuk()">
           <img src="https://cdn-icons-png.flaticon.com/128/9402/9402342.png" class="icon-3d-std"> DAFTAR MASUK
         </button>
 
-        <button id="btnKeluarMain" class="btn btn-keluar" onclick="hantarKeluar(false)" style="margin-top:5px; display:flex;">
+        <button id="btnKeluarMain" class="btn btn-keluar" onclick="hantarKeluar()" style="margin-top:5px; display:flex;">
           <img src="https://cdn-icons-png.flaticon.com/128/3580/3580154.png" class="icon-3d-std"> DAFTAR KELUAR
         </button>
 
@@ -1864,25 +1654,6 @@ GURU</option>
     let val = document.getElementById('customPromptInput').value;
     closeCustomModal();
     if(window.tempCallback) window.tempCallback(val);
-  }
-
-  function sendNotification(title, body, tag) {
-    if(Notification.permission === "granted") {
-      if('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(title, {
-            body: body,
-            icon: "https://cdn-icons-png.flaticon.com/128/9402/9402342.png",
-            tag: tag,
-            renotify: true,
-            vibrate: [200, 100, 200],
-            data: { url: location.href } 
-          });
-        });
-      } else {
-        new Notification(title, { body: body, tag: tag });
-      }
-    }
   }
 
   function openHelpModalWithPasscode() {
@@ -2411,7 +2182,7 @@ GURU</option>
       
       localStorage.removeItem('ehadir_locked_name');
       localStorage.removeItem('ehadir_locked_kat');
-      showModernAlert("Nyah-Kunci", "Profil telah di-nyah kunci. Auto Check-In Dibatalkan.", "info");
+      showModernAlert("Nyah-Kunci", "Profil telah di-nyah kunci.", "info");
       initLockName();
       return;
     }
@@ -2430,7 +2201,7 @@ GURU</option>
     localStorage.setItem('ehadir_locked_name', current);
     localStorage.setItem('ehadir_locked_kat', currentKat);
     
-    showModernAlert("Berjaya Kunci", "Nama, Kategori & Avatar dikunci. <br>Sistem Auto Check-In sedia.", "success");
+    showModernAlert("Berjaya Kunci", "Nama, Kategori & Avatar dikunci. <br>Sila Daftar Masuk/Keluar secara manual.", "success");
     initLockName();
   }
 
