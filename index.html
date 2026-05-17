@@ -16,11 +16,11 @@
         window.location.reload();
     }
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzlNjrvfskqWv_fg9BAiTJQ8MZSyhe5-m_JAzlDQr0nKQwARhaniFssIQtT1n3j-kV6dg/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyuYAu_61JGA8mWwLV5B97nWM_PiKJYdytVwECVyGDmsljUPxw_NHp2tk-ZKQ1GnVng0w/exec'; 
     const PASSCODE = "101010";
     const SCHOOL_LAT = 5.250891554235944; 
     const SCHOOL_LNG = 100.75591785106874; 
-    const RADIUS_METER = 20000; 
+    const RADIUS_METER = 200; 
     
     // KONFIGURASI GOOGLE LOGIN (GURU)
     const GOOGLE_CLIENT_ID = "195095139195-vknkcc0h9b8pp75n4ej2c7jpdc5r62br.apps.googleusercontent.com";
@@ -998,7 +998,12 @@
     .container { background: #ffffff; padding: 0; border-radius: 30px; width: 100%; max-width: 420px; text-align: center; position: relative; box-shadow: 0 20px 40px rgba(30,60,114,0.15), inset 0 0 0 5px rgba(255,255,255,0.8), inset 0 0 20px rgba(0,0,0,0.03); overflow: hidden; padding-bottom: 30px; border: 1px solid #d1def0; }
 
     .header-bg { background: linear-gradient(145deg, #3498db, #1e3c72); padding: 20px 20px 30px 20px; color: white; border-radius: 0 0 30px 30px; box-shadow: 0 10px 20px rgba(30,60,114,0.3), inset 0 2px 5px rgba(255,255,255,0.3), inset 0 -4px 10px rgba(0,0,0,0.3); border-bottom: 2px solid #152b53; margin-bottom: 25px; position: relative; }
-    .top-bar-row { display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 11px; color: #e0eafc; font-weight: 500; letter-spacing: 0.5px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 20px; white-space: nowrap; text-transform: uppercase; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
+    .top-bar-row { display: flex; justify-content: center; align-items: center; gap: 8px 12px; font-size: 11px; color: #e0eafc; font-weight: 500; letter-spacing: 0.5px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 20px; flex-wrap: wrap; text-transform: uppercase; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); line-height: 1.5; }
+    .top-separator { opacity: 0.5; }
+    @media (max-width: 360px) {
+      .top-bar-row { font-size: 10px; gap: 5px 8px; }
+      .top-separator { display: none; }
+    }
 
     .main-title-block { display: flex; flex-direction: column; align-items: center; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
     .title-small { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: #a8c0ff; margin-bottom: 5px; font-weight: 600; }
@@ -1132,6 +1137,11 @@
 
     .google-btn-wrapper { margin: 20px 0; display: flex; justify-content: center; }
     .help-link { color: #3498db; text-decoration: underline; font-size: 11px; cursor: pointer; margin-top: 15px; display: inline-block; font-weight: 700; }
+    
+    /* CROPPER CSS */
+    #cropContainer { width: 150px; height: 150px; margin: 0 auto 15px; position: relative; overflow: hidden; border-radius: 50%; border: 3px solid #3498db; background: #eee; display: none; cursor: grab; }
+    #cropContainer:active { cursor: grabbing; }
+    #cropCanvas { position: absolute; top: 0; left: 0; }
   </style>
 </head>
 <body oncontextmenu="return false;"> 
@@ -1186,7 +1196,14 @@
       
       <div style="text-align:left; font-size:11px; margin-bottom:5px; font-weight:bold; color:#1e3c72;">Gambar Wajah (Pilihan):</div>
       <input type="file" id="regGuruFoto" accept="image/*" style="width:100%; padding:10px; margin-bottom:10px; background:#fff;" onchange="processGuruFoto(this)">
+      
       <img id="regGuruFotoPreview" style="display:none; width:100px; height:100px; object-fit:cover; border-radius:50%; margin:0 auto 10px; border:3px solid #3498db;">
+      
+      <div id="cropContainer" onmousedown="startCDrag(event)" onmousemove="doCDrag(event)" onmouseup="stopCDrag()" onmouseleave="stopCDrag()" ontouchstart="startCDrag(event)" ontouchmove="doCDrag(event)" ontouchend="stopCDrag()">
+          <canvas id="cropCanvas" width="150" height="150"></canvas>
+      </div>
+      <div id="cropHint" style="display:none; font-size:10px; color:#c0392b; margin-top:-10px; margin-bottom:10px;">* Anda boleh seret (drag) gambar untuk melaraskan kedudukan.</div>
+
       <input type="hidden" id="regGuruFotoBase64">
       
       <div style="font-size:11px; color:#1e3c72; font-weight:bold; margin-bottom:5px; text-align:left;">Atau Pilih Avatar:</div>
@@ -1243,12 +1260,12 @@
           <img src="https://cdn-icons-png.flaticon.com/128/3652/3652191.png" class="icon-3d-mini"> 
           <span id="dateDisplay">--.--.----</span>
         </span> 
-        <span style="opacity: 0.5;">|</span> 
+        <span class="top-separator">|</span> 
         <span>
           <img src="https://cdn-icons-png.flaticon.com/128/2972/2972531.png" class="icon-3d-mini"> 
           <span id="clockDisplay">--:--</span>
         </span> 
-        <span style="opacity: 0.5;">|</span> 
+        <span class="top-separator">|</span> 
         <span>
         <span class="icon-3d-mini" style="font-size: 16px; vertical-align: middle; margin-right: 1px;">🕌</span>
         <span id="hijriDisplay" style="vertical-align: middle;">...</span>
@@ -1386,8 +1403,7 @@
           <input type="text" id="cutiNama" placeholder="NAMA PENUH" style="text-transform:uppercase">
           <select id="cutiKategori">
               <option value="" disabled selected>-- PEKERJAAN --</option>
-              <option value="GURU">
-GURU</option>
+              <option value="GURU">GURU</option>
               <option value="AKP">AKP</option>
               <option value="KEBERSIHAN">KEBERSIHAN</option>
           </select>
@@ -1451,7 +1467,7 @@ GURU</option>
           </label>
         </div>
 
-        <input type="text" id="namaPelawatInput" placeholder="NAMA PENUH PELAWAT" style="text-transform:uppercase; margin-top:15px;">
+        <input type="text" id="namaPelawatInput" placeholder="NAMA/TUJUAN" style="text-transform:uppercase; margin-top:15px;">
 
         <input type="hidden" id="base64Foto">
         <button id="btnPelawatSubmit" class="btn btn-pelawat" onclick="hantarPelawat()">
@@ -1485,6 +1501,17 @@ GURU</option>
   </div>
 
 <script>
+  let avatarClickData = {};
+  
+  // Cropper Variables
+  let cropImgObj = null;
+  let cropCanvas = null;
+  let cropCtx = null;
+  let cOffsetX = 0, cOffsetY = 0;
+  let isCDragging = false;
+  let cStartX = 0, cStartY = 0;
+  let cScale = 1;
+
   window.addEventListener('load', () => {
     if (navigator.onLine && 'caches' in window) {
       caches.keys().then(names => {
@@ -1767,13 +1794,14 @@ GURU</option>
 
       document.getElementById('regGuruFoto').value = "";
       
-      if (pic && pic.includes("drive.google.com")) {
+      document.getElementById('regGuruFotoPreview').style.display = 'none';
+      document.getElementById('cropContainer').style.display = 'none';
+      document.getElementById('cropHint').style.display = 'none';
+      document.getElementById('regGuruFotoBase64').value = "";
+
+      if (pic && (pic.includes("drive.google.com") || pic.startsWith("data:image"))) {
           document.getElementById('regGuruFotoPreview').src = pic;
           document.getElementById('regGuruFotoPreview').style.display = 'block';
-          document.getElementById('regGuruFotoBase64').value = ""; 
-      } else {
-          document.getElementById('regGuruFotoPreview').style.display = 'none';
-          document.getElementById('regGuruFotoBase64').value = "";
       }
 
       let titleEl = document.querySelector('#guruRegisterModal .modal-title');
@@ -1838,6 +1866,8 @@ GURU</option>
       document.getElementById('regGuruJawatan').value = "";
       document.getElementById('regGuruFoto').value = "";
       document.getElementById('regGuruFotoPreview').style.display = 'none';
+      document.getElementById('cropContainer').style.display = 'none';
+      document.getElementById('cropHint').style.display = 'none';
       document.getElementById('regGuruFotoBase64').value = "";
       
       let grid = document.getElementById('regAvatarGrid');
@@ -1861,6 +1891,47 @@ GURU</option>
       document.getElementById('guruRegisterModal').style.display = 'flex';
   }
 
+  // Cropper Drag Functions
+  function drawCrop() {
+      if(!cropCtx || !cropImgObj) return;
+      cropCtx.clearRect(0, 0, 150, 150);
+      let scaledW = cropImgObj.width * cScale;
+      let scaledH = cropImgObj.height * cScale;
+      if(cOffsetX > 0) cOffsetX = 0;
+      if(cOffsetY > 0) cOffsetY = 0;
+      if(cOffsetX < 150 - scaledW) cOffsetX = 150 - scaledW;
+      if(cOffsetY < 150 - scaledH) cOffsetY = 150 - scaledH;
+      cropCtx.drawImage(cropImgObj, cOffsetX / cScale, cOffsetY / cScale, 150 / cScale, 150 / cScale, 0, 0, 150, 150);
+      document.getElementById('regGuruFotoBase64').value = cropCanvas.toDataURL("image/jpeg", 0.8);
+  }
+
+  function getCClientPos(e) {
+      if(e.touches && e.touches.length > 0) return {x: e.touches[0].clientX, y: e.touches[0].clientY};
+      return {x: e.clientX, y: e.clientY};
+  }
+
+  function startCDrag(e) {
+      if(!cropImgObj) return;
+      e.preventDefault();
+      isCDragging = true;
+      let pos = getCClientPos(e);
+      cStartX = pos.x - cOffsetX;
+      cStartY = pos.y - cOffsetY;
+  }
+
+  function doCDrag(e) {
+      if(!isCDragging || !cropImgObj) return;
+      e.preventDefault();
+      let pos = getCClientPos(e);
+      cOffsetX = pos.x - cStartX;
+      cOffsetY = pos.y - cStartY;
+      drawCrop();
+  }
+
+  function stopCDrag() {
+      isCDragging = false;
+  }
+
   function processGuruFoto(i) {
     if (i.files && i.files[0]) {
       let r = new FileReader();
@@ -1868,15 +1939,22 @@ GURU</option>
         let im = new Image();
         im.src = e.target.result;
         im.onload = function() {
-          let cv = document.createElement("canvas");
-          let ctx = cv.getContext("2d");
-          cv.width = 400;
-          cv.height = 400 * (im.height / im.width);
-          ctx.drawImage(im, 0, 0, cv.width, cv.height);
-          let d = cv.toDataURL("image/jpeg", 0.7);
-          document.getElementById('regGuruFotoPreview').src = d;
-          document.getElementById('regGuruFotoPreview').style.display = 'block';
-          document.getElementById('regGuruFotoBase64').value = d;
+          cropImgObj = im;
+          let cw = 150; let ch = 150;
+          cropCanvas = document.getElementById('cropCanvas');
+          cropCtx = cropCanvas.getContext('2d');
+          
+          let scaleX = cw / im.width;
+          let scaleY = ch / im.height;
+          cScale = Math.max(scaleX, scaleY);
+          
+          cOffsetX = (cw - (im.width * cScale)) / 2;
+          cOffsetY = (ch - (im.height * cScale)) / 2;
+          
+          document.getElementById('regGuruFotoPreview').style.display = 'none';
+          document.getElementById('cropContainer').style.display = 'block';
+          document.getElementById('cropHint').style.display = 'block';
+          drawCrop();
         };
       };
       r.readAsDataURL(i.files[0]);
@@ -2387,6 +2465,31 @@ GURU</option>
     });
   }
 
+  // Avatar click handler for Triple Click Easter Egg
+  function handleAvatarClick(el, src) {
+      let now = Date.now();
+      let id = el.src; 
+      if(!avatarClickData[id]) avatarClickData[id] = { count: 0, time: now };
+      
+      if (now - avatarClickData[id].time < 800) {
+          avatarClickData[id].count++;
+      } else {
+          avatarClickData[id].count = 1;
+      }
+      avatarClickData[id].time = now;
+      
+      if (avatarClickData[id].count === 3) {
+          avatarClickData[id].count = 0;
+          viewFullImage(src);
+      }
+  }
+
+  function viewFullImage(src) {
+      let imgEl = document.getElementById('imgFull');
+      imgEl.src = src;
+      document.getElementById('imageModal').style.display = "flex";
+  }
+
   function renderList(items) {
     let dateInput = document.getElementById('historyDate');
     let dateVal = dateInput ? dateInput.value : "";
@@ -2429,7 +2532,7 @@ GURU</option>
           let displayImg = i.avatar || "https://cdn-icons-png.flaticon.com/128/4140/4140047.png";
           if (i.foto && i.foto.length > 10) displayImg = i.foto; 
           
-          let avatarOrPhoto = `<img src="${displayImg}" onerror="console.error('Ralat muat gambar (CORS/URL):', this.src); this.src='https://cdn-icons-png.flaticon.com/128/4140/4140047.png';" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid ${catColors[i.kategori] || '#ccc'}; margin-right:8px;">`;
+          let avatarOrPhoto = `<img src="${displayImg}" onclick="handleAvatarClick(this, '${displayImg}')" onerror="console.error('Ralat muat gambar (CORS/URL):', this.src); this.src='https://cdn-icons-png.flaticon.com/128/4140/4140047.png';" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid ${catColors[i.kategori] || '#ccc'}; margin-right:8px; cursor:pointer;" title="Klik 3 kali untuk papar penuh">`;
 
           let imgBtn = (i.kategori === "PELAWAT" && i.foto) ? `<span class="icon-btn" onclick="viewImage(${idx})"><img src="https://cdn-icons-png.flaticon.com/128/3342/3342137.png" class="icon-3d-mini" style="margin:0;"></span>` : "";
           let xBtn = (isHistory || i.kategori === "CUTI" || i.keluar) ? "" : `<span class="icon-btn" style="border-color:#fadbd8; background:linear-gradient(145deg, #ffe0e0, #ffb3b3);" onclick="keluarManual('${i.nama}')"><img src="https://cdn-icons-png.flaticon.com/128/6861/6861362.png" class="icon-3d-mini" style="margin:0;"></span>`;
